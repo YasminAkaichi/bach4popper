@@ -6,7 +6,10 @@ from popper.tester import Tester
 from popper.core import Clause
 from aggstrategy import aggregate_outcomes, aggregate_popper
 
+import numpy as np
+from popper.structural_tester import StructuralTester
 
+from popper.util import load_kbpath
 # ================================
 #    GLOBAL STATE
 # ================================
@@ -58,14 +61,16 @@ def popper_initialisation():
     # Load bias file only
     # The user provides a path where: BK, EX, BIAS normally exist
     # Here we assume bias.pl is inside that folder
-    bias_file = f"{path_dir}/bias.pl"
-
+    #bias_file = f"{path_dir}/bias.pl"
+    
+    kbpath = f"{path_dir}"
+    _, _, bias_file = load_kbpath(kbpath)
     settings = Settings(bias_file, None, None)
     stats = Stats(log_best_programs=settings.info)
     solver = ClingoSolver(settings)
     grounder = ClingoGrounder()
     constrainer = Constrain()
-    tester = Tester(settings)
+    tester = StructuralTester()
 
     current_hypothesis = None
     current_before = None
@@ -73,9 +78,18 @@ def popper_initialisation():
     current_clause_size = 1
 
 
+def convert_to_blpy(rule):
+    r = rule.replace(" ", "")
+    r = r.replace(":-", ",")
+    r = r.replace("),", ");")
+    if not r.endswith("."):
+        r += "."
+    return r
 # ================================
 #   SEND RULES TO CLIENT
 # ================================
+
+
 def tell_hypothesis(client, hyp):
     nb_cl = len(hyp)
     str_nb_cl = str(nb_cl)
@@ -137,85 +151,64 @@ def to_prolog_clause(rule):
         return f"{head_str} :- {', '.join(body_strs)}."
     else:
         return f"{head_str}."
+    
+def normalize_rule_for_store(rule_str):
+    """
+    Transforme une règle Popper 'f(A):-has_car(A);three_wheels(B)' 
+    → 'f(A) :- has_car(A), three_wheels(B).'
+    """
+
+    # nettoyer espaces
+    rule = rule_str.strip()
+
+    # enlever point final s'il existe (on le remettra nous-même)
+    if rule.endswith('.'):
+        rule = rule[:-1]
+
+    # *** Popper utilise parfois ';' au lieu de ',' ***
+    rule = rule.replace(";", ",")
+
+    # Ajouter espace autour de ':-'
+    if ":-" in rule:
+        head, body = rule.split(":-")
+        rule = f"{head.strip()} :- {body.strip()}"
+    else:
+        # fait rare mais au cas où c’est un fact
+        rule = rule.strip()
+
+    # remettre un point final
+    if not rule.endswith("."):
+        rule += "."
+
+    return rule
+
 # ================================
 #   MAIN LOOP
 # ================================
 
 def run_server():
-
     global current_hypothesis, current_before, current_min_clause, current_clause_size, solver
 
-    # SETTINGS OK
-    
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_ip = "127.0.0.1"  # replace with the server's IP address
-    server_port = 8000  # replace with the server's port number
-    client.connect((server_ip, server_port))
+    cli_prompt()
+    initialisation()        # demande nb_client, path_dir
+    popper_initialisation() # instancie settings, solver, tester, stats
 
-    finish_learning = False
-    hypothesis = []
-     
-    try:               
-        cli_prompt()
-        initialisation()
-        popper_initialisation()  
-        while not finish_learning:  
-            if (Eplus, Eminus) == ("all","none"):
-                break
-            # 1) POPPER: génération initiale
+    # Connexion au STORE 
+    store = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    store.connect(("127.0.0.1", 8000))
+    print("Connected to STORE.")
+
+    # 1) Initial outcome = ("none","none") comme Flower 
+    Eplus, Eminus = "none", "none"
+
+    try:
+        while True:
+
+            # =======================================================
+            # 1) POPPER STEP : generate hypothesis
+            # =======================================================
             rules_arr, current_min_clause, current_before, current_clause_size, solver, solved = aggregate_popper(
-            None,
-            settings,
-            solver,
-            grounder,
-            constrainer,
-            tester,
-            stats,
-            current_min_clause,
-            current_before,
-            current_hypothesis,
-            current_clause_size,)
-        
-            # Convertir en Clause et strings
-            current_hypothesis = [Clause.from_string(r) for r in rules_arr[0].tolist()]
-            #rules_str = [Clause.to_code(r) for r in current_hypothesis]
-            rules_str = []
-
-            for r in current_hypothesis:
-                s = Clause.to_code(r)
-
-                # s = 'f(A):-has_car(A),three_wheels(B)'
-
-                # 1) remettre les virgules
-                s = s.replace(";", ",")
-
-                # 2) ajouter un point s'il n'y en a pas
-                if not s.endswith("."):
-                    s += "."
-
-                rules_str.append(s)
-
-            
-
-
-            print(f"current hypo = ({current_hypothesis})")
-
-            print(f"rules_str = ({rules_str})")
-            tell_hypothesis(client, rules_str)
-
-            # 3) RECEVOIR TOUS LES EPAIRS
-            all_pairs = []
-
-            lepairs = get_epsilon_pairs(client)
-            parsed = [parse_epair(e) for e in lepairs]
-            all_pairs.extend(parsed)
-
-            Eplus, Eminus = aggregate_outcomes(all_pairs)
-            print(f"Aggregated outcome = ({Eplus}, {Eminus})")
-
-            # 4) POPPER maj contraintes et re-génération
-            rules_arr, current_min_clause, current_before, current_clause_size, solver, solved = aggregate_popper(
-                (Eplus, Eminus),
+                (Eplus, Eminus),          # jamais None
                 settings,
                 solver,
                 grounder,
@@ -225,21 +218,49 @@ def run_server():
                 current_min_clause,
                 current_before,
                 current_hypothesis,
-                current_clause_size,
+                current_clause_size
             )
 
-            current_hypothesis = [Clause.from_string(r) for r in rules_arr[0].tolist()]
+            # Extraire règles Popper : strings utilisables par store
+            rules_str = [Clause.to_code(r) for r in current_hypothesis] \
+                        if current_hypothesis else []
 
-            # Stop
+            # Si aucune règle générée : STOP
+            if not rules_arr or len(rules_arr[0]) == 0:
+                print("No more rules produced. Stopping.")
+                break
+
+            raw_rules = rules_arr[0].tolist()
+
+            # 2) 🔥 Convertir en syntaxe BLPy pour le STORE
+            rules_str = [normalize_rule_for_store(r) for r in raw_rules]
+            print("Generated hypothesis (Store format):", rules_str)
+
+            # 3) Envoi au STORE
+            tell_hypothesis(store, rules_str)
+
+            # =======================================================
+            # 3) RÉCUPÉRER EPAIRS
+            # =======================================================
+            lepairs = get_epsilon_pairs(store)
+            parsed = [parse_epair(e) for e in lepairs]
+
+            Eplus, Eminus = aggregate_outcomes(parsed)
+            print(f"Aggregated outcome = ({Eplus}, {Eminus})")
+
+            # =======================================================
+            # 4) CONDITION D'ARRÊT FILP
+            # =======================================================
             if (Eplus, Eminus) == ("all", "none"):
-                print("Global solution reached. Stopping.")
-                finished = True
+                print(" Global solution found (ALL/NONE). Stopping.")
+                break
+
     except Exception as e:
-        print(f"Error: {e}")
+        print("Error:", e)
+
     finally:
-        # close client socket (connection to the server)
-        client.close()
-        print("Connection to server closed")
+        store.close()
+        print("Connection to store closed.")
 
 
 # ================================
