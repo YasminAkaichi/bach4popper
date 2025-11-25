@@ -1,0 +1,4 @@
+The parsimonious module is needed. To install it run
+
+pip install parsimonious
+

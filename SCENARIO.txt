@@ -1,0 +1,44 @@
+1) Ouvrir quatre terminaux.
+
+2) Dans le premier, introduire après le prompt :
+
+python python bbpopper.py
+
+Cette commande lance le serveur pour le store. Bien que ceci gère
+l'élément central de l'application, il s'agit d'un terminal "passif"
+dans lequel des messages sont affichés sans que l'utilisateur
+n'intervienne.
+
+3) Dans un deuxième terminal, introduire :
+
+python srvpopper.py.
+
+Ceci lance le serveur de Popper. Il est demandé à l'utilisateur
+d'introduire le nombre de client (par exemple 2) et la directory (par
+exemple toto) où se trouve les fichiers de background. Pour l'instant
+seul le nombre de client est utilisé. La gestion des hypothèses
+générées par Popper est simulée en plaçant les deux mêmes clauses sur
+le store et en gérant explicitement la terminaison du programme. Bien
+entendu ceci sera modifié quand le code de Popper sera joint à
+l'application.
+
+Après avoir introduit ces deux informations, il faut laisser faire le
+programme et répondre 1 à la question de savoir s'il faut continuer.
+
+4) Dans un troisième terminal, introduire
+
+python clipopper.py
+
+Ceci lance un des clients Popper. Il est demandé d'introduire
+l'identifiant du client. Si N est le nombre de clients introduit dans
+le terminal au point 3, les clients sont numérotés de 1 à N. Par
+exemple avec N=2, on introduira 1 dans le troisième terminal (et 2
+dans le quatrième terminal). Puis il faut introduire, le path de la
+directory où se trouvent les fichiers de tests pour Popper. Ce dernier
+point n'est pas pris en compte pour l'instant.
+
+Après avoir introduit ces deux informations, il faut laisser faire le
+programme et répondre 1 à la question de savoir s'il faut continuer.
+
+5) Faire de même dans un quatrième terminal en introduisant 2 plutôt que 1.
+

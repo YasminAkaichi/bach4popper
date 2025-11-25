@@ -1,0 +1,35 @@
+from parser import Parser
+from grammar import GRAMMAR
+
+
+def test_banner():
+    banner = """
+
+  ______             __ 
+ /_  __/___   _____ / /_
+  / /  / _ \ / ___// __/
+ / /  /  __/(__  )/ /_  
+/_/   \___//____/ \__/  
+                        
+   ______                                               
+  / ____/_____ ____ _ ____ ___   ____ ___   ____ _ _____
+ / / __ / ___// __ `// __ `__ \ / __ `__ \ / __ `// ___/
+/ /_/ // /   / /_/ // / / / / // / / / / // /_/ // /    
+\____//_/    \__,_//_/ /_/ /_//_/ /_/ /_/ \__,_//_/     
+                                                        
+
+
+
+"""
+    print(banner)
+
+
+def run_test():
+    test_banner()
+    msg = "none"
+    while (msg != "close"):
+        msg = input("To be parsed:   ")
+        print(GRAMMAR['blpy_entry'].parse(msg))
+
+myparser = Parser()
+run_test()

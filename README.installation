@@ -1,0 +1,5 @@
+This software is inspired by BPLPY_v4_dist. As a result, the 
+parsimonious module is needed. To install it run
+
+pip install parsimonious
+

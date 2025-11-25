@@ -1,0 +1,7 @@
+def run-test():
+    msg = "prgmlen(2) present"
+    ast = myparser.parse_comAugStInfo(response)
+    print("Success")
+
+myparser = Parser()
+run_test()

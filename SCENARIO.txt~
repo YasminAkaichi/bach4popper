@@ -1,0 +1,28 @@
+1) Ouvrir trois terminaux.
+
+2) Dans le premier, introduire après le prompt :
+
+python blsrv.py
+
+3) Dans les deux autres, introduire :
+
+python blcli.py
+
+Un de ceux là sert à introduire des tell, l'autre des ask
+
+4) Le scenario proposé est
+
+* dans le terminal pour les tells, faire
+
+ tell(a)
+ tell(f(X,Y))
+ tell( prgm( { h(X) :- b(X), c(X). } ))
+
+* dans le terminal pour les asks, faire
+
+ ask(a)
+ ask(f(X,Y))
+ ask(f(X))
+ ask(prgm)
+
+Bien entendu, introduire les commandes en alternance.

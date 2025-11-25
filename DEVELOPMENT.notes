@@ -1,0 +1,48 @@
+1.BANNERS
+---------
+
+Banners are produced with figlet as follows :
+
+figlet "BB Popper" > banner_bb_popper
+figlet -f slant "Srv Popper" > banner_srv_popper.txt
+figlet -f Contessa "Cli Popper" > banner_cli_popper.txt
+
+
+2. DESIGN
+---------
+
+The software is aimed to be run with three actors
+
++ the server for the store, incarnated by bbpopper.py. In BLPy
+  terminology, it essentially consists of the blpysrv.py actor.
+
++ the server for popper, incarnated by srvpopper.py. In BLPy
+  terminology, it is a client. Its main goal is 
+
+    - to keep a set of constraints that allow to produce programs
+    - at each iteration,
+        * to produce one Horn clause program following the constraints
+	* to publish this program as a series of si-terms on the store
+	* to get from each client the pair (eplus,eminus)
+	* to aggregate these pairs and to enrich the set of constraints
+	  accordingly
+    - these iterations stop once the best hypothesis (best according to
+      Popper) is produced
+    - for simplicity, we shall assume that Popper clients are numbered 1
+      to N with N being determined when launching the program
+    - similarly, the background directory is assumed to be given when
+      starting the srvpopper agent
+
++ the client for popper, incarnated by clipopper.py. In BLPy
+  terminology, it is also a client. Its main goal is to iterate as
+  follows
+
+    - to read a Horn clause program. To that end,
+        * it first reads the program length, by asking the si-term
+	  prgmlen
+	* then to iteratively, read the clauses by asking the si-term
+	  prgm(j), with j being the j-th clause
+    - to test this program against local data
+    - to produce the pair (eplus,eminus) accordingly, say (ep_k,em_k),
+      k being the identifier of the client
+    - to tell the si-term epair(k,ep_k,em_k)
