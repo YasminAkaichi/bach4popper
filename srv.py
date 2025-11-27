@@ -10,13 +10,17 @@ import numpy as np
 from popper.structural_tester import StructuralTester
 
 from popper.util import load_kbpath
+
+
+OUTCOME_ENCODING = {"all": 1, "some": 2, "none": 3}
+OUTCOME_DECODING = {1: "all", 2: "some", 3: "none"}
 # ================================
 #    GLOBAL STATE
 # ================================
 class FILPServerState:
     """Conserve TOUT l’état du solver entre les rounds."""
 
-    def __init__(self, settings, solver, grounder, constrainer, tester, stats, min_clause, before, clause_size, hypothesis,nb_client, path_dir):
+    def __init__(self, settings, solver, grounder, constrainer, tester, stats):
         self.settings = settings
         self.solver = solver
         self.grounder = grounder
@@ -24,14 +28,10 @@ class FILPServerState:
         self.tester = tester
         self.stats = stats
 
-        self.current_hypothesis = hypothesis
-        self.current_before = before
-        self.current_min_clause = min_clause
-        self.current_clause_size = clause_size
-        self.nb_client = nb_client
-        self.path_dir = path_dir
-
-
+        self.current_hypothesis = None
+        self.current_before = None
+        self.current_min_clause = 0
+        self.current_clause_size = 1
 # ================================
 #   UI
 # ================================
@@ -46,44 +46,6 @@ def cli_prompt():
 """
     print(banner)
 
-
-def initialisation():
-    print("Please introduce ...")
-    nb_client = int(input("- number of Popper clients: "))
-    path_dir = input("- path to BK/Examples (folder): ")
-    return nb_client,path_dir
-
-# ================================
-#   POPPER INITIALISE
-# ================================
-def popper_initialisation(nb_client, path_dir):
-    #global settings, stats, solver, grounder, constrainer, tester
-    #global current_hypothesis, current_before, current_min_clause, current_clause_size
-     
-    print("Initialising Distributed FILP...")
-
-    # Load bias file only
-    # The user provides a path where: BK, EX, BIAS normally exist
-    # Here we assume bias.pl is inside that folder
-    #bias_file = f"{path_dir}/bias.pl"
-    
-    kbpath = f"{path_dir}"
-    _, _, bias_file = load_kbpath(kbpath)
-    settings = Settings(bias_file, None, None)
-    stats = Stats(log_best_programs=settings.info)
-    solver = ClingoSolver(settings)
-    grounder = ClingoGrounder()
-    constrainer = Constrain()
-    tester = StructuralTester()
-
-    current_hypothesis = None
-    current_before = None
-    current_min_clause = 0
-    current_clause_size = 0
-    nb_client=nb_client
-    path_dir=path_dir
-    state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_before,current_min_clause,current_clause_size,current_hypothesis, nb_client, path_dir)
-    return state 
 
 def convert_to_blpy(rule):
     r = rule.replace(" ", "")
@@ -108,30 +70,25 @@ def tell_hypothesis(client, hyp):
         str_i = str(i)
         clause = "{" + hyp[i] + "}"
         #clause = hyp[i].replace(",", ";")
-        
         print(f"clause = {clause}")
         msg = f"tell( prgm({str_i},{clause}) )"
         client.send(msg.encode("utf-8")[:1024])
         client.recv(1024)
-        
 
 
 
-def get_epsilon_pairs(client,st):
-    lepairs = []
-    str_nb_client = str(st.nb_client)
-    print(f"nb_client = {str_nb_client}")
-    for i in range(1,st.nb_client+1):
-        str_i = str(i)
-        msg = f"ask( epair({str_i}) )"
-        client.send(msg.encode("utf-8")[:1024])
-        response = client.recv(1024)
-        response = response.decode("utf-8")        
-        lepairs.append(response)
-    #msg = "reset"
-    #client.send(msg.encode("utf-8")[:1024])
-    #client.recv(1024)
-    return lepairs
+def get_epsilon_pairs(client):
+    pairs = []
+    for i in range(1, nb_client + 1):
+        msg = f"ask( epair({i}) )"
+        client.send(msg.encode())
+        resp = client.recv(1024).decode()
+        pairs.append(resp)
+
+    # After collecting ALL outcomes:
+    client.send(b"reset")
+    client.recv(1024)
+    return pairs
 
 
 
@@ -194,21 +151,40 @@ def normalize_rule_for_store(rule_str):
 #   MAIN LOOP
 # ================================
 
+
 def run_server():
-    #global current_hypothesis, current_before, current_min_clause, current_clause_size, solver
 
     cli_prompt()
-    nb_client, path_dir = initialisation()        # demande nb_client, path_dir
-    st = popper_initialisation(nb_client, path_dir) # instancie settings, solver, tester, stats
+    print("Initialising FILP server...")
 
-    # Connexion au STORE 
+    nb_client = int(input("- number of Popper clients: "))
+    path = input("- path to BK/Examples (folder): ")
+
+    # ----------------------------------------------------------
+    # POPPER INITIALISATION
+    # ----------------------------------------------------------
+    kbpath = f"{path}"
+    _, _, bias_file = load_kbpath(kbpath)
+
+    settings  = Settings(bias_file, None, None)
+    stats     = Stats(log_best_programs=settings.info)
+    solver    = ClingoSolver(settings)
+    grounder  = ClingoGrounder()
+    constrainer = Constrain()
+    tester    = StructuralTester()
+
+    # === Le vrai state (!!!)
+    st = FILPServerState(settings, solver, grounder, constrainer, tester, stats)
+
+    # ----------------------------------------------------------
+    # Connect to STORE
+    # ----------------------------------------------------------
     store = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     store.connect(("127.0.0.1", 8000))
     print("Connected to STORE.")
 
-    # 1) Initial outcome = ("none","none") comme Flower 
-    Eplus, Eminus = "none", "none"
-    
+    # Initial outcomes (comme Flower)
+    outcome_pair = ("none", "none")
 
     try:
         round_id = 0
@@ -217,11 +193,11 @@ def run_server():
             print(f"\n========== ROUND {round_id} ==========")
             round_id += 1
 
-            # =======================================================
-            # 1) POPPER STEP : generate hypothesis
-            # =======================================================
-            rules_arr, current_min_clause, current_before, current_clause_size, solver, solved, new_rules = aggregate_popper(
-                (Eplus, Eminus),          # jamais None
+            # ------------------------------------------------------
+            # 1) POPPER ONE STEP
+            # ------------------------------------------------------
+            rules_arr, new_min, new_before, new_clause_sz, new_solver, solved, new_rules = aggregate_popper(
+                outcome_pair,
                 st.settings,
                 st.solver,
                 st.grounder,
@@ -233,23 +209,24 @@ def run_server():
                 st.current_hypothesis,
                 st.current_clause_size
             )
-            st.current_min_clause = current_min_clause
-            st.current_before = current_before
-            st.current_clause_size = current_clause_size
-            st.solver = solver
+
+            # update FILP internal state
+            st.current_min_clause = new_min
+            st.current_before = new_before
+            st.current_clause_size = new_clause_sz
+            st.solver = new_solver
+            
+            if new_rules and len(new_rules[0])>0:
+                st.current_hypothesis = new_rules 
             # Extraire règles Popper : strings utilisables par store
-                
-                 
+            
             rules_str = [Clause.to_code(r) for r in st.current_hypothesis] \
                         if st.current_hypothesis else []
-            
-            if rules_arr and len(rules_arr[0]) > 0:
-                st.current_hypothesis = new_rules  # Clause objects OK
 
             # Si aucune règle générée : STOP
-            #if not rules_arr or len(rules_arr[0]) == 0:
-             #   print("No more rules produced. Stopping.")
-              #  break
+            if not rules_arr or len(rules_arr[0]) == 0:
+                print("No more rules produced. Stopping.")
+                break
 
             raw_rules = rules_arr[0].tolist()
 
@@ -263,14 +240,11 @@ def run_server():
             # =======================================================
             # 3) RÉCUPÉRER EPAIRS
             # =======================================================
-            lepairs = get_epsilon_pairs(store, st)
+            lepairs = get_epsilon_pairs(store)
             parsed = [parse_epair(e) for e in lepairs]
 
             Eplus, Eminus = aggregate_outcomes(parsed)
             print(f"Aggregated outcome = ({Eplus}, {Eminus})")
-
-            store.send(b"reset")
-            store.recv(1024)
 
             # =======================================================
             # 4) CONDITION D'ARRÊT FILP
@@ -285,6 +259,7 @@ def run_server():
     finally:
         store.close()
         print("Connection to store closed.")
+
 
 
 # ================================

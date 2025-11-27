@@ -75,8 +75,7 @@ def aggregate_popper(
     current_min_clause,
     current_before,
     current_hypothesis,
-    clause_size,
-    no_constraints=False,
+    clause_size
 ):
     """
     Performs ONE Popper iteration:
@@ -109,7 +108,7 @@ def aggregate_popper(
     # 2) APPLY CONSTRAINTS (unless disabled)
     # ------------------------------------------------------
 
-    if (current_hypothesis is not None) and (not no_constraints):
+    if (current_hypothesis is not None):
 
         constraints = build_rules(
             settings=settings,
@@ -139,7 +138,10 @@ def aggregate_popper(
     model = solver.get_model()
     if not model:
         empty = np.array([], dtype="<U1000")
-        return [empty], current_min_clause, current_before, clause_size, solver, False
+        clause_size += 1
+        solver.update_number_of_literals(clause_size)
+        stats.update_num_literals(clause_size)
+        return [empty], current_min_clause, current_before, clause_size, solver, False, current_hypothesis
 
     new_rules, new_before, new_min_clause = generate_program(model)
 
@@ -150,7 +152,7 @@ def aggregate_popper(
     if outcome_pair == ("all","none"):
         rules_bytes = [Clause.to_code(r) for r in new_rules]
         arr = np.array(rules_bytes, dtype="<U1000")
-        return [arr], new_min_clause, new_before, clause_size, solver, True
+        return [arr], new_min_clause, new_before, clause_size, solver, True, new_rules
 
     # ------------------------------------------------------
     # 5) STANDARD RETURN
@@ -159,4 +161,4 @@ def aggregate_popper(
     rules_bytes = [Clause.to_code(r) for r in new_rules]
     arr = np.array(rules_bytes, dtype="<U1000")
 
-    return [arr], new_min_clause, new_before, clause_size, solver, False
+    return [arr], new_min_clause, new_before, clause_size, solver, False, new_rules
