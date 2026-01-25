@@ -64,7 +64,131 @@ def aggregate_outcomes(outcomes):
 #   FILP Distributed Popper Step (Server-Side)
 # ------------------------------------------------------
 
+
 def aggregate_popper(
+    outcome,                 # (ε⁺, ε⁻) or (None, None)
+    settings,
+    solver,
+    grounder,
+    constrainer,
+    tester,                  # StructuralTester
+    stats,
+    current_min_clause,
+    current_before,
+    current_hypothesis,
+    clause_size,
+):
+    """
+    One federated Popper step.
+    EXACT equivalent of ONE iteration of centralized Popper,
+    using symbolic outcome only (FILP-safe).
+    """
+
+    log.info("===== FedPopper aggregate_popper =====")
+    ep = en = outcome
+    has_feedback = outcome != (None, None)
+
+    if has_feedback:
+        log.info(f"Outcome received: {outcome}")
+    else:
+        log.info("No test feedback yet (initial hypothesis generation)")
+
+    # ---------------------------------------------------------
+    # 1) Add constraints ONLY if feedback exists
+    # ---------------------------------------------------------
+    if has_feedback and current_hypothesis:
+        log.debug("Building constraints from previous hypothesis")
+
+        constraints = build_rules(
+            settings=settings,
+            stats=stats,
+            constrainer=constrainer,
+            tester=tester,              # Structural only
+            program=current_hypothesis,
+            before=current_before,
+            min_clause=current_min_clause,
+            outcome=outcome,
+        )
+
+        grounded = ground_rules(
+            stats,
+            grounder,
+            solver.max_clauses,
+            solver.max_vars,
+            constraints,
+        )
+
+        solver.add_ground_clauses(grounded)
+
+    # ---------------------------------------------------------
+    # 2) Generate ONE hypothesis (solver.get_model)
+    # ---------------------------------------------------------
+    model = solver.get_model()
+
+    if not model:
+        clause_size += 1
+        solver.update_number_of_literals(clause_size)
+        stats.update_num_literals(clause_size)
+
+        log.info(f"No model left, increasing clause size to {clause_size}")
+
+        return (
+            [np.array([], dtype="<U1000")],
+            current_min_clause,
+            current_before,
+            clause_size,
+            solver,
+            False,
+            current_hypothesis,
+        )
+
+    # Decode hypothesis
+    current_rules, before, min_clause = generate_program(model)
+
+    # Register program structurally (no scores)
+    #stats.register_program(current_rules, None)
+
+    # ---------------------------------------------------------
+    # 3) Solution check (Popper stopping condition)
+    # ---------------------------------------------------------
+    if has_feedback and outcome == (Outcome.ALL, Outcome.NONE):
+        log.info("✅ Popper solution found")
+
+        rules_arr = np.array(
+            [Clause.to_code(r) for r in current_rules],
+            dtype="<U1000",
+        )
+
+        return (
+            [rules_arr],
+            min_clause,
+            before,
+            clause_size,
+            solver,
+            True,               # solved
+            current_rules,
+        )
+
+    # ---------------------------------------------------------
+    # 4) Normal continuation
+    # ---------------------------------------------------------
+    rules_arr = np.array(
+        [Clause.to_code(r) for r in current_rules],
+        dtype="<U1000",
+    )
+
+    return (
+        [rules_arr],
+        min_clause,
+        before,
+        clause_size,
+        solver,
+        False,
+        current_rules,
+    )
+
+
+def aggregate_popperx(
     outcome_pair,
     settings,
     solver,
@@ -108,14 +232,19 @@ def aggregate_popper(
     # 2) APPLY CONSTRAINTS (unless disabled)
     # ------------------------------------------------------
 
-    if (current_hypothesis is not None):
+    has_feedback = (
+    outcome_pair is not None
+    and outcome_pair != ("none", "none")
+)
+
+    if has_feedback and (current_hypothesis is not None):
 
         constraints = build_rules(
             settings=settings,
             stats=stats,
             constrainer=constrainer,
             tester=tester,
-            program=current_hypothesis,   
+            program=current_hypothesis,
             before=current_before,
             min_clause=current_min_clause,
             outcome=normalized_outcome,
@@ -130,6 +259,7 @@ def aggregate_popper(
         )
 
         solver.add_ground_clauses(grounded)
+
 
     # ------------------------------------------------------
     # 3) GENERATE a new model

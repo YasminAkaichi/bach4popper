@@ -1,6 +1,6 @@
 """
 
- Copyright (c) 2025 Jean-Marie Jacquet 
+ Copyright (c) 2025 Jean-Marie Jacquet and Manel Barkallah
  
  Permission is hereby granted, free of charge, to any person obtaining
  a  copy of  this  software and  associated  documentation files  (the
@@ -161,8 +161,8 @@ class Visitor(NodeVisitor):
     def visit_stLPrgm(self, node, visited_children) -> list:
         th, _, opt_lth = visited_children
         lth = [th] + [x for _, _, x, _ in opt_lth]
-        return lhc
-   
+        return lth #return lhc
+        
     # augStInfo     =  ac_word ( augStInfoArgs )?
     def visit_augStInfo(self, node, visited_children) -> Abs_SITerm:
         lcw, opt_augStInfoArgs = visited_children
@@ -183,18 +183,8 @@ class Visitor(NodeVisitor):
         l_asi_terms = [si] + [t for _, _, t, _ in opt_lasi]
         return l_asi_terms
 
-    # comAugStInfo  = augStInfo ( lComments )?
-    def visit_comAugStInfo(self, node, visited_children) -> Abs_SITerm:
-        asi, opt_augStInfoArgs = visited_children
-        return asi
-    
-    # lComments     =  ( __ ac_word )*
-    def visit_lComments(self, node, visited_children) -> list:
-        opt_lc = visited_children
-        l_lc = [t for _, t in opt_lc]
-        return l_lc
 
-    
+
     
     # ----------------------------------------------------------- #
     #                                                             #
@@ -202,7 +192,7 @@ class Visitor(NodeVisitor):
     #                                                             #
     # ----------------------------------------------------------- #
     
-    # primitive  = tell / ask / reset
+    # primitive  = tell / ask / reset / get / nask / inbb
     visit_primitive = visit_choice
 
     # tell   =  "tell(" __ augStInfo __ ")"
@@ -219,8 +209,24 @@ class Visitor(NodeVisitor):
     def visit_reset(self, node, visited_children) -> AST_PRIMITIVE:
         si = SI_ATOMIC("none")
         return AST_PRIMITIVE("reset",si)
+    
+    # get   =  "get(" __ augStInfo __ ")"
+    def visit_get(self, node, visited_children) -> AST_PRIMITIVE:
+        _, _, si, _, _ = visited_children
+        return AST_PRIMITIVE("get",si)
 
-    # shPrimitive = tellprgm / askprgm / tellth / askth
+    # nask  =  "nask("  __ augStInfo __ ")"
+    def visit_nask(self, node, visited_children) -> AST_PRIMITIVE:
+        _, _, si, _, _ = visited_children
+        return AST_PRIMITIVE("nask",si)
+    
+    # inbb    =  "in("  __ augStInfo __ ")"
+    def visit_inbb(self, node, visited_children) -> AST_PRIMITIVE:
+        _, _, si, _, _ = visited_children
+        return AST_PRIMITIVE("inbb",si)
+    
+
+    # shPrimitive = tellprgm / askprgm / getprgm / naskprgm / inprgm / tellth / askth / getth / naskth / inth
     visit_shPrimitive = visit_choice
 
     # tellprgm = "tellprgm(" __ stPrgm __ ")"
@@ -232,6 +238,21 @@ class Visitor(NodeVisitor):
     def visit_askprgm(self, node, visited_children) -> AST_PRIMITIVE:
         si = SI_ATOMIC("none")
         return AST_PRIMITIVE("askprgm",si)
+        
+    # getprgm = "getprgm(" __ stPrgm __ ")"
+    def visit_getprgm(self, node, visited_children) -> AST_PRIMITIVE: 
+        si = SI_ATOMIC("none")
+        return AST_PRIMITIVE("getprgm", si)
+    
+    # naskprgm = "naskprgm()"
+    def visit_naskprgm(self, node, visited_children) -> AST_PRIMITIVE:
+        si = SI_ATOMIC("none")
+        return AST_PRIMITIVE("naskprgm",si)
+    
+    # inprgm = "inprgm()"
+    def visit_inprgm(self, node, visited_children) -> AST_PRIMITIVE:
+        si = SI_ATOMIC("none")
+        return AST_PRIMITIVE("inprgm",si)
 
     # tellth = "tellth(" __ stTheories __ ")"
     def visit_tellth(self, node, visited_children) -> AST_PRIMITIVE:
@@ -242,6 +263,22 @@ class Visitor(NodeVisitor):
     def visit_askth(self, node, visited_children) -> AST_PRIMITIVE:
         si = SI_ATOMIC("none")
         return AST_PRIMITIVE("askth",si)
+    
+    # getth = "getth(" __ stTheories __ ")"
+    def visit_getth(self, node, visited_children) -> AST_PRIMITIVE:
+        _, _, sth, _, _ = visited_children
+        return AST_PRIMITIVE("getth",sth)
+    
+    # naskth = "naskth()"
+    def visit_naskth(self, node, visited_children) -> AST_PRIMITIVE:
+        si = SI_ATOMIC("none")
+        return AST_PRIMITIVE("naskth",si)
+    
+     # inth = "inth()"
+    def visit_inth(self, node, visited_children) -> AST_PRIMITIVE:
+        si = SI_ATOMIC("none")
+        return AST_PRIMITIVE("inth",si)
+
 
 
     # ----------------------------------------------------------- #
@@ -254,9 +291,7 @@ class Visitor(NodeVisitor):
     def visit_close(self, node, visited_children) -> AST_CLOSE_FUNCTION:
         return AST_CLOSE_FUNCTION("close",[])
 
-    
-
-    
+      
 
     # ----------------------------------------------------------- #
     #                                                             #

@@ -1,6 +1,6 @@
 """
 
- Copyright (c) 2025 Jean-Marie Jacquet 
+ Copyright (c) 2025 Jean-Marie Jacquet and Manel Barkallah
  
  Permission is hereby granted, free of charge, to any person obtaining
  a  copy of  this  software and  associated  documentation files  (the
@@ -23,8 +23,6 @@
  SOFTWARE.
 
 """
-
-
 
 # ------------------------------------------------------------------ #
 #                                                                    #
@@ -58,6 +56,7 @@ class STORE:
     def __init__(self):
         self.theStore = {}
         self.theWaitingList = {}
+        self.theWaitingNList = {}        
         self.lock = threading.Lock()
         self.parser = Parser()
         
@@ -68,6 +67,14 @@ class STORE:
             else:
                self.theWaitingList.update({ functor: [(pid,si)]})
 
+
+    def insertNPid(self, functor, si, pid):
+#        with self.lock:
+            if functor in self.theWaitingNList.keys():
+               self.theWaitingNList[functor].append((pid,si))
+            else:
+               self.theWaitingNList.update({ functor: [(pid,si)]})
+    """
     def wakeUpOnNewSI(self, functor):
 #        with self.lock:        
             if functor in self.theWaitingList.keys():
@@ -76,7 +83,40 @@ class STORE:
                     bool_res,si_res = self.is_si_in_dict(si,self.theStore[functor])
                     if bool_res:
                        pid.send((str(si_res) + " now present").encode("utf-8"))
-                       (self.theWaitingList[functor]).remove((pid,si))                           
+                       (self.theWaitingList[functor]).remove((pid,si))         
+    """
+    def wakeUpOnNewSI(self, functor):
+        if functor not in self.theWaitingList:
+            return
+
+        # itérer sur une COPIE
+        waiting = list(self.theWaitingList[functor])
+
+        for pid, si in waiting:
+            if functor in self.theStore:
+                bool_res, si_res = self.is_si_in_dict(si, self.theStore[functor])
+                if bool_res:
+                    pid.send((str(si_res) + " now present").encode("utf-8"))
+                    self.theWaitingList[functor].remove((pid, si))
+
+
+            
+    # wakeUpNOnSI(functor)
+    # ---------------------
+    #               
+    def wakeUpNOnSI(self, functor):
+    #      with self.lock:
+            if functor in self.theWaitingNList.keys():
+               for pid, si in list(self.theWaitingNList[functor]):
+                  if functor not in self.theStore.keys():
+                     pid.send((str(si) + " not present").encode("utf-8"))
+                     (self.theWaitingNList[functor]).remove((pid,si))
+                  else:
+                     bool_res, si_res = self.is_si_in_dict(si, self.theStore[functor])
+                     if not bool_res:
+                        pid.send((str(si) + " not present").encode("utf-8"))
+                        (self.theWaitingNList[functor]).remove((pid,si))
+                                       
 
     # function tell(functor, si)
     # --------------------------
@@ -124,7 +164,7 @@ class STORE:
         # uast_asked = ast_asked
         fct_asked = uast_asked.functor
         args_asked = uast_asked.arguments
-        if (fct_asked == fct_asked):
+        if (fct_asked == fct_told):
             return self.partial_match_list(args_told,args_asked)
         else:
             return False
@@ -138,7 +178,6 @@ class STORE:
             return res
         else:
             return False
-
         
     # function is_si_in_dict(si,dict)
     # -------------------------------
@@ -159,9 +198,7 @@ class STORE:
                 res = self.partial_match(k,si)
                 if res: found_si = k
         return (res,found_si)
-
-
-    
+   
     # function ask(functor, si)
     # --------------------------
     #
@@ -187,32 +224,103 @@ class STORE:
                 return (False, "ask(" + str(si) +") ff failed")
 
 
+    # function reset_store
+
     def reset_store(self,pid):
         self.theStore = {}
         self.theWaitingList = {}
         pid.send(("store reset").encode("utf-8"))
         return (True, "store reset")
+    
+
+    # function nask(functor, si)
+    # --------------------------
+    #
+    # Checks that the si-term does NOT exist in the store.
+    # Returns True if absent, False if present.
+
+    def nask(self, functor, si, pid):
+        with self.lock:
+            if functor not in self.theStore.keys():
+                pid.send((str(si) + " not present").encode("utf-8"))
+                return (True, str(si) + " not present")
+            else: 
+                bool_res, si_res = self.is_si_in_dict(si, self.theStore[functor])
+                if bool_res:
+                    self.insertNPid(functor,si,pid)
+                    # pid.send(("nask(" + str(si) + ") failed").encode("utf-8"))
+                    return (False, "nask(" + str(si) + ") failed")
+                else: 
+                    pid.send((str(si) + " not present").encode("utf-8"))
+                    return (True, str(si) + " not present")
+
+    # function inbb(functor, si)
+    # --------------------------
+    #
+    # checks whether an si-term exists in the store,
+    # does not block, does not put anything on hold
+    # returns only True/False
+
+    def inbb(self, functor, si, pid):
+        with self.lock:
+            if functor not in self.theStore:
+                pid.send(("false").encode("utf-8"))
+                return (False, "in(" + str(si) + ") = false")
+            else:                 
+                bool_res, si_res = self.is_si_in_dict(si, self.theStore[functor])
+                if bool_res:
+                    pid.send(("true").encode("utf-8"))
+                    return (True, str(si_res) + " present")
+                else:
+                    pid.send(("false").encode("utf-8"))
+                    return (False, "in(" + str(si) + ") = false")
 
 
-# To be completed            
-#    def get(self, si):
-#        if si in self.theStore.keys():
-#            if self.theStore[si] >= 1:
-#                self.theStore[si] = self.theStore[si]-1
-#                return (True, str(si) + " successfully got")
-#            else:
-#                return (False, "get(" + str(si) +") failed")
-#        else:
-#            return False
-#        
-#    def nask(self, si):
-#        if si in self.theStore.keys():
-#            if (self.theStore[si] == 0):
-#                return (True, str(si) + " not present")
-#            else:
-#                return (False, "nask(" + str(si) +") failed")
-#        else:
-#            return (True, str(si) + " not present")
-#
-#    def print_store(self):
-#        return (True, str(self.theStore))
+    # function get(functor, si)
+    # --------------------------
+    #
+    # Takes a si-term from the store and deletes it if it exists.
+
+            
+    def get(self, functor, si, pid):
+        with self.lock:
+            if functor in self.theStore.keys():
+                bool_res, si_res = self.is_si_in_dict(si, (self.theStore)[functor])
+                if bool_res:
+                    self.theStore[functor][si_res] = self.theStore[functor][si_res] - 1
+                    if self.theStore[functor][si_res] == 0:
+                        del self.theStore[functor][si_res]
+
+                        # delete functor if empty
+                        if not self.theStore[functor]:
+                            del self.theStore[functor]
+                        self.wakeUpNOnSI(functor)                     
+                    pid.send((str(si_res) + " successfully got").encode("utf-8"))
+                    return (True, str(si_res) + " successfully got")
+                else:
+                    self.insertPid(functor, si, pid)
+                    return (False, "get(" + str(si) + ") failed")
+            else:
+                self.insertPid(functor, si, pid)
+                return (False, "get(" + str(si) + ") failed")
+    def ask_functor(self, functor, pid):
+        """
+        Retourne TOUS les si-terms présents pour un functor donné.
+        """
+        with self.lock:
+            if functor not in self.theStore:
+                pid.send(("none").encode("utf-8"))
+                return (False, "none")
+
+            # retourner la liste des clés
+            res = list(self.theStore[functor].keys())
+            pid.send((str(res)).encode("utf-8"))
+            return (True, res)
+
+    # function print_store(self)
+    # --------------------------
+    # Displays the entire contents of the store
+
+    def print_store(self):  
+        return (True, str(self.theStore))
+ 

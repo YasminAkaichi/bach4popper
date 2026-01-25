@@ -1,6 +1,6 @@
 """
 
- Copyright (c) 2025 Jean-Marie Jacquet 
+ Copyright (c) 2025 Jean-Marie Jacquet and Manel Barkallah
  
  Permission is hereby granted, free of charge, to any person obtaining
  a  copy of  this  software and  associated  documentation files  (the
@@ -40,9 +40,9 @@ from data_structures import (
 
 from store import STORE
 
-class Interpreter():
-    def __init__(self):
-        self.theStore = STORE()
+class Interpreter:
+    def __init__(self, store):
+        self.theStore = store
 
     def eval(self,ast,pid):
         if isinstance(ast, Abs_AG):
@@ -70,6 +70,21 @@ class Interpreter():
             return self.theStore.ask(functor,rsarg,pid)
         elif prim == "reset":
             return self.theStore.reset_store(pid)
+        elif prim == "get":
+            print(f"functor = {functor}")
+            rsarg = sarg
+            print(f"rsarg = {rsarg}")
+            return self.theStore.get(functor,rsarg,pid)
+        elif prim == "nask":
+            print(f"functor = {functor}")
+            rsarg = sarg
+            print(f"rsarg = {rsarg}")
+            return self.theStore.nask(functor,rsarg,pid)
+        elif prim == "inbb":
+            print(f"functor = {functor}")
+            rsarg = sarg
+            print(f"rsarg = {rsarg}")
+            return self.theStore.inbb(functor,rsarg,pid)
         elif prim == "tellprgm":
             print(f"functor = {functor}")
             print(f"sarg = {sarg}")
@@ -80,6 +95,21 @@ class Interpreter():
             print(f"sarg = {sarg}")
             rsarg = "prgm"
             return self.theStore.ask(functor,rsarg,pid)
+        elif prim == "getprgm":
+            print(f"functor = {functor}")
+            print(f"sarg = {sarg}")
+            rsarg = "prgm(" + sarg + ")"
+            return self.theStore.get(functor,rsarg,pid)
+        elif prim == "naskprgm":
+            print(f"functor = {functor}")
+            print(f"sarg = {sarg}")
+            rsarg = "prgm"
+            return self.theStore.nask(functor,rsarg,pid)
+        elif prim == "inprgm":
+            print(f"functor = {functor}")
+            print(f"sarg = {sarg}")
+            rsarg = "prgm"
+            return self.theStore.inbb(functor,rsarg,pid)
         elif prim == "tellth":
             print(f"functor = {functor}")
             print(f"sarg = {sarg}")
@@ -90,6 +120,21 @@ class Interpreter():
             print(f"sarg = {sarg}")
             rsarg = "th"
             return self.theStore.ask(functor,rsarg,pid)
+        elif prim == "getth":
+            print(f"functor = {functor}")
+            print(f"sarg = {sarg}")
+            rsarg = "th(" + sarg + ")"
+            return self.theStore.get(functor,rsarg,pid)
+        elif prim == "naskth":
+            print(f"functor = {functor}")
+            print(f"sarg = {sarg}")
+            rsarg = "th"
+            return self.theStore.nask(functor,rsarg,pid)
+        elif prim == "inth":
+            print(f"functor = {functor}")
+            print(f"sarg = {sarg}")
+            rsarg = "th"
+            return self.theStore.inbb(functor,rsarg,pid)
         else:
             print("error in evaluating primitive")
             return (False, "Error in evaluating a primitive") 

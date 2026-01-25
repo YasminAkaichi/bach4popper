@@ -74,8 +74,7 @@ def run_server():
 # To be kept as global objects         
 mystore = STORE()
 myparser = Parser()
-myinterpreter = Interpreter()
+myinterpreter = Interpreter(mystore)
 
 
 run_server()
-

@@ -12,7 +12,7 @@ from popper.loop import decide_outcome
 from popper.util import Settings, Stats
 from popper.util import load_kbpath
 import re
-
+import traceback
 # ======================================================
 #  Helper: parse Popper rule string
 # ======================================================
@@ -24,6 +24,8 @@ import re
 #settings = Settings(bias_file, ex_file, bk_file)
 #tester = Tester(settings)
 #stats  = Stats(log_best_programs=settings.info)
+
+from parser import Parser
 
 def parse_rule(rule_str):
     """Convert 'h(A):-b1(B),b2(C).' into Popper structure."""
@@ -190,83 +192,158 @@ def parse_rule_popper(rule_str):
 
     return (head, body)
 
-def popper_test_local(rule_strings, tester):
-    if not rule_strings:
-        return ("none", "none")
 
+def test_hypothesis(rule_strings, tester):
+    """
+    Teste une hypothèse complète (une liste de clauses Popper).
+    rule_strings = [
+        "f(A) :- has_load(B,D),has_load(C,D), ... .",
+        "f(A) :- has_load(D,C),triangle(B), ... .",
+        "f(A) :- has_load(B,D),has_car(A,B), ... ."
+    ]
+    """
     try:
-        parsed = [transform_rule_to_tester_format(r) for r in rule_strings]
-        print("Parsed rules:", parsed)
-        #rules = [parse_rule(r) for r in rule_strings]
-        parsed_rules = [parse_rule_popper(r) for r in rule_strings]
-        print("Parsed rules:", parsed_rules)
-        cm = tester.test(parsed_rules)
+        rules = []
 
-        outcome = decide_outcome(cm)
-        def normalize(o):
-            return o.name.lower() if hasattr(o, "name") else str(o).lower()
+        for r in rule_strings:
+            r = r.strip()
+            if r.endswith('.'):
+                r = r[:-1]
 
-        Eplus  = normalize(outcome[0])
-        Eminus = normalize(outcome[1])
-        return Eplus,Eminus
+            if ":-" in r:
+                head_str, body_str = r.split(":-")
+            else:
+                head_str = r
+                body_str = ""
+
+            head = Literal.from_string(head_str.strip())
+
+            # parse body into literals
+            body_literals = []
+            if body_str.strip():
+                for lit in body_str.split(","):
+                    lit = lit.strip()
+                    if lit:
+                        body_literals.append(Literal.from_string(lit))
+
+            rules.append((head, tuple(body_literals)))
+
+        # Maintenant on teste TOUTES les clauses ensemble
+        cm = tester.test(rules)
+        Eplus, Eminus = decide_outcome(cm)
+
+        return (
+            str(Eplus).lower() if Eplus else "none",
+            str(Eminus).lower() if Eminus else "none"
+        )
 
     except Exception as e:
-        print("🔥 Tester failure:", e)
-        return ("none", "none")
+        print("🔥 Error while testing hypothesis:", e)
+        return ("x", "x")
 
-def send_epair(sock, client_id, Eplus, Eminus):
-    msg = f"tell(epair({client_id},{Eplus},{Eminus}))"
-    sock.send(msg.encode())
-    sock.recv(1024)
+def popper_test_local(rule_strings, tester):
+    """
+    Compute (Eplus, Eminus) exactly as Popper.
+    Rule_strings = ["f(A) :- ... ."]
+    """
+    try:
+        rules = []
+        for r in rule_strings:
+            r = r.strip()
+            if r.endswith('.'):
+                r = r[:-1]
 
+            if ":-" in r:
+                head_str, body_str = r.split(":-")
+                body_literals = re.findall(r'\w+\([^)]*\)', body_str)
+            else:
+                head_str = r
+                body_literals = []
 
-def popper_read_hypothesis(sock):
-    """Reads hypothesis rules sent by server via BLPy protocol."""
+            head = Literal.from_string(head_str.strip())
+            body = tuple(Literal.from_string(b.strip()) for b in body_literals)
+            rules.append((head, body))
 
-    # DEMANDE prgmlen
-    sock.send(b"ask(prgmlen)")
-    resp = sock.recv(1024).decode()
-    print("Raw Received:", resp)
+        cm = tester.test(rules)
+        Eplus, Eminus = decide_outcome(cm)
 
-    # Extraire prgmlen(N)
-    match = re.search(r"prgmlen\((\d+)\)", resp)
-    if not match:
-        print("Could not extract prgmlen")
-        return []
-    nb_cl = int(match.group(1))
-    print(f"nb_cl = {nb_cl}")
+        # NORMALISATION (clé du problème !)
+        def norm(x):
+            if hasattr(x, "name"):
+                return x.name.lower()
+            return str(x).lower()
 
-    clauses = []
+        return norm(Eplus), norm(Eminus)
 
-    # Pour chaque clause : ask(prgm(i))
-    for i in range(nb_cl):
-        sock.send(f"ask(prgm({i}))".encode())
-        resp = sock.recv(1024).decode()
-        print("Raw Clause:", resp)
-
-        # Extraire le bloc { ... }
-        m = re.search(r"\{(.*)\}", resp)
-        if not m:
-            print("Could not extract rule body")
-            continue
-
-        raw_rule = m.group(1).strip()
-
-        # Normaliser la syntaxe Popper :
-        # - enlever espaces inutiles
-        # - s'assurer du point final
-        clean_rule = raw_rule.strip()
-        if not clean_rule.endswith("."):
-            clean_rule += "."
-
-        print("➡️ Parsed rule:", clean_rule)
-        clauses.append(clean_rule)
-
-    return clauses
+    except Exception as e:
+        print("🔥 Local test failed:", e)
+        return ("x", "x")
 
 
 
-def popper_test_localx(rule_strings, tester):
+
+def get_nb_clause_from_prgmlen_si(ast):
+    try:
+        arg_prgmlen_si = ast.arguments
+        nb_cl = arg_prgmlen_si[0]
+        return nb_cl
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+import re
+
+def transform_rule_to_tester_format(rule_str):
+    head_body = rule_str.split(":-")
+    if len(head_body) != 2:
+        raise ValueError(f"Invalid rule format: {rule_str}")
+
+    head_str = head_body[0].strip()
+    body_str = head_body[1].strip()
+
+    body_literals = re.findall(r'\w+\(.*?\)', body_str)
+
+    head = Literal.from_string(head_str)
+    body = tuple(Literal.from_string(lit) for lit in body_literals)
+
+    return (head, body)
+
+def popper_test_hypothesis_final(hypothesis_strings, tester):
+    try:
+        print("\n🧪 Starting local test of hypothesis...")
+        print("📥 Hypothesis strings:")
+        for h in hypothesis_strings:
+            print("   🔹", h)
+
+        rules = []
+        for rs in hypothesis_strings:
+            formatted = transform_rule_to_tester_format(rs)
+            if formatted is None:
+                print(f"❌ Failed to transform rule: {rs}")
+                continue
+            rules.append(formatted)
+
+        print(f"✅ Total rules parsed: {len(rules)}")
+
+        print(f"📊 Total Pos examples: {len(tester.pos)}")
+        print(f"📉 Total Neg examples: {len(tester.neg)}")
+
+        cm = tester.test(rules)
+
+        print("📈 Confusion matrix:", cm)
+
+        Eplus, Eminus = decide_outcome(cm)
+        print(f"✅ Outcome = ({Eplus}, {Eminus})")
+
+        return str(Eplus).lower(), str(Eminus).lower()
+
+    except Exception as e:
+        print("🔥 Error while testing hypothesis:")
+        traceback.print_exc()
+        return ("x", "x")
+
+
+def popper_test_local(rule_strings, tester):
     if len(rule_strings) == 0:
         return ("none", "none")
 
@@ -286,14 +363,61 @@ def popper_test_localx(rule_strings, tester):
     return (Eplus, Eminus)
 
 
-def send_epair(sock, client_id, Eplus, Eminus):
-    msg = f"tell(epair({client_id},{Eplus},{Eminus}))"
+
+def send_epair(sock, client_id, tour, Eplus, Eminus):
+    msg = f"tell(epair({tour},{client_id},{Eplus},{Eminus}))"
     sock.send(msg.encode())
-    _ = sock.recv(1024)
+    sock.recv(1024)  # confirmation du store
 
 
 def check_finish():
     return input("Finish? (0=no, 1=yes): ") == "1"
+
+
+    
+import re
+
+
+def popper_read_hypothesis(sock, tour):
+    # get prgmlen(tour, N)
+    query = f" ask(prgmlen({tour})) "
+    sock.send(query.encode())
+    resp = sock.recv(1024).decode()
+    print("Raw prgmlen:", resp)
+
+    # parse N
+    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(\d+)\s*\)", resp)
+    if not m:
+        print("Could not extract prgmlen — maybe the STORE replied differently?")
+        return []
+
+    nb_cl = int(m.group(1))
+    print(f"[CLIENT] nb_cl = {nb_cl}")
+
+    clauses = []
+
+    for i in range(nb_cl):
+        #query = f" get(prgm({tour},{i})) "
+        query = f" ask(prgm({tour},{i})) "
+
+        sock.send(query.encode())
+        resp = sock.recv(4096).decode()
+        print("Raw clause:", resp)
+
+        m = re.search(r"\{\s*(.*?)\s*\}", resp)
+        if not m:
+            print("❌ Could not extract clause")
+            continue
+
+        rule = m.group(1).strip()
+        if not rule.endswith("."):
+            rule += "."
+
+        clauses.append(rule)
+
+    return clauses
+
+
 
 
 def run_client():
@@ -311,23 +435,27 @@ def run_client():
         settings = Settings(bias_file, ex_file, bk_file)
         tester = Tester(settings)
         settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
-        
+        tour = 0
         stats  = Stats(log_best_programs=settings.info)
-        while not finish:
-
+        while True:
+            msg = f"ask(round({tour}))"
+            sock.send(msg.encode())
+            sock.recv(1024)
             # 1) RECEIVE RULES
-            hypothesis = popper_read_hypothesis(sock)
+            hypothesis = popper_read_hypothesis(sock,tour)
             print("\nReceived hypothesis:")
             for h in hypothesis:
                 print("   ", h)
 
             # 2) LOCAL TESTING
-            Eplus, Eminus = popper_test_local(hypothesis, tester)
+            Eplus, Eminus = popper_test_hypothesis_final(hypothesis, tester)
+            #Eplus,Eminus = test_hypothesis(hypothesis, tester)
+
             print(f"Local outcome = ({Eplus}, {Eminus})")
-
+         
             # 3) SEND OUTCOME TO SERVER
-            send_epair(sock, client_id, Eplus, Eminus)
-
+            send_epair(sock, client_id,tour, Eplus, Eminus)
+            tour += 1
             #finish = check_finish()
 
     except Exception as e:

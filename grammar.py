@@ -1,6 +1,6 @@
 """
 
- Copyright (c) 2025 Jean-Marie Jacquet 
+ Copyright (c) 2025 Jean-Marie Jacquet and Manel Barkallah
  
  Permission is hereby granted, free of charge, to any person obtaining
  a  copy of  this  software and  associated  documentation files  (the
@@ -81,9 +81,6 @@ GRAMMAR = Grammar(
     augStInfoArgs =  "(" __ augStLInfoArgs  __ ")"
     augStLInfoArgs = extInfo __ ("," __ extInfo __)*
 
-    comAugStInfo  = augStInfo ( lComments )?
-    lComments     =  ( __ ac_word )*
-
     # siOnStore     =  stInfo / stiPrgm / stiTh
     # stiPrgm       =  "prgm(" __ stPrgm __ ")"
     # stiTh         =  "theories(" __ stTheories __ ")"
@@ -95,19 +92,30 @@ GRAMMAR = Grammar(
     #                                                             #
     # ----------------------------------------------------------- #
     
-    primitive  = tell / ask / reset
+    primitive  = tell / ask / reset / get / nask / inbb
 
     tell   =  "tell(" __ augStInfo __ ")"
     ask    =  "ask("  __ augStInfo __ ")"
+    get    =  "get(" __ augStInfo __ ")"
+    nask   =  "nask(" __ augStInfo __ ")" 
+    inbb   =  "in(" __ augStInfo __ ")"
     reset  =  "reset"
 
-    shPrimitive = tellprgm / askprgm / tellth / askth
+    shPrimitive = tellprgm / askprgm / getprgm / naskprgm / inprgm / tellth / askth / getth / naskth / inth
 
     tellprgm = "tellprgm(" __ stPrgm __ ")"
-    askprgm = "askprgm()"
+    getprgm  = "getprgm(" __ stPrgm __ ")"
+    askprgm  = "askprgm()"
+    naskprgm = "naskprgm()"
+    inprgm   = "inprgm()"
 
     tellth = "tellth(" __ stTheories __ ")"
-    askth = "askth()"
+    getth  = "getth(" __ stTheories __ ")"
+    askth  = "askth()"
+    naskth = "naskth()"
+    inth   = "inth()"
+
+    
 
 
     # ----------------------------------------------------------- #

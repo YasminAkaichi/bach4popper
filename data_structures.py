@@ -1,6 +1,6 @@
 """
 
- Copyright (c) 2025 Jean-Marie Jacquet 
+ Copyright (c) 2025 Jean-Marie Jacquet
  
  Permission is hereby granted, free of charge, to any person obtaining
  a  copy of  this  software and  associated  documentation files  (the
@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 #                              SI-terms                               #
 #                                                                     #
 #      structured information terms which serve as arguments of       #
-#                      BLPy primitives : tell, ask                    #
+#           BLPy primitives : tell, ask, nask, get, in                #
 #                                                                     #
 #                                                                     #
 #     rem: modify from version 1 to treat atomic si-terms as          #
