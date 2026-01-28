@@ -9,6 +9,8 @@ import time
 import numpy as np
 from popper.structural_tester import StructuralTester
 
+from popper.loop import decide_outcome, calc_score
+import traceback
 from popper.util import load_kbpath
 # ================================
 #    GLOBAL STATE
@@ -57,7 +59,7 @@ def initialisation():
 # ================================
 #   POPPER INITIALISE
 # ================================
-def popper_initialisation(path_dir):
+def popper_initialisation_old(path_dir):
     #global settings, stats, solver, grounder, constrainer, tester
     #global current_hypothesis, current_before, current_min_clause, current_clause_size
      
@@ -85,6 +87,46 @@ def popper_initialisation(path_dir):
     #state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_before,current_min_clause,current_clause_size,current_hypothesis)
     state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_min_clause, current_before, current_clause_size, current_hypothesis)
     return state 
+
+
+def popper_initialisation(path_dir):
+    print("Initialising Distributed FILP...")
+
+    # ========== FEDERATED / STRUCTURAL PART ==========
+    kbpath = f"{path_dir}"
+    _, _, bias_file = load_kbpath(kbpath)
+
+    settings = Settings(bias_file, None, None)
+    stats = Stats(log_best_programs=settings.info)
+    solver = ClingoSolver(settings)
+    grounder = ClingoGrounder()
+    constrainer = Constrain()
+    tester_structural = StructuralTester()
+
+    # ========== CENTRALIZED TESTING PART ==========
+    
+    bk_file, ex_file, bias_file = load_kbpath(kbpath)
+    settings_full = Settings(bias_file, ex_file, bk_file)
+    tester_full = Tester(settings_full)
+
+    state = FILPServerState(
+        settings=settings,
+        solver=solver,
+        grounder=grounder,
+        constrainer=constrainer,
+        tester=tester_structural,
+        stats=stats,
+        min_clause=0,
+        before=None,
+        clause_size=0,
+        hypothesis=None
+    )
+
+    # AJOUT IMPORTANT
+    state.tester_full = tester_full
+
+    return state
+
 
 def convert_to_blpy(rule):
     r = rule.replace(" ", "")
@@ -319,6 +361,63 @@ def reset_store(store):
 #   MAIN LOOP
 # ================================
 
+
+from popper.core import Clause, Literal
+import re
+
+def transform_rule_to_tester_format(rule_str):
+    head_body = rule_str.split(":-")
+    if len(head_body) != 2:
+        raise ValueError(f"Invalid rule format: {rule_str}")
+
+    head_str = head_body[0].strip()
+    body_str = head_body[1].strip()
+
+    body_literals = re.findall(r'\w+\(.*?\)', body_str)
+
+    head = Literal.from_string(head_str)
+    body = tuple(Literal.from_string(lit) for lit in body_literals)
+
+    return (head, body)
+
+def central_test_hypothesis(hypothesis_strings, tester):
+    try:
+        print("\n Starting local test of hypothesis...")
+        print("Hypothesis strings:")
+        for h in hypothesis_strings:
+            print(" ", h)
+
+        rules = []
+        for rs in hypothesis_strings:
+            formatted = transform_rule_to_tester_format(rs)
+            if formatted is None:
+                print(f"Failed to transform rule: {rs}")
+                continue
+            rules.append(formatted)
+
+        #print(f"Total rules parsed: {len(rules)}")
+
+        #print(f"Total Pos examples: {len(tester.pos)}")
+        #print(f"Total Neg examples: {len(tester.neg)}")
+
+        cm = tester.test(rules)
+
+        print("Confusion matrix:", cm)
+
+        Eplus, Eminus = decide_outcome(cm)
+        print(f"Outcome = ({Eplus}, {Eminus})")
+        score = calc_score(cm)
+
+        return str(Eplus).lower(), str(Eminus).lower(), float(score)
+
+    except Exception as e:
+        print("Error while testing hypothesis:")
+        traceback.print_exc()
+        return ("x", "x")
+
+
+
+
 def run_server():
     cli_prompt()
     nb_client, path_dir = initialisation()
@@ -336,6 +435,8 @@ def run_server():
     current_rules_str = []
     search_exhausted = False
     MAX_ROUNDS = 8000
+    central_done = False
+    central_round = None
     try:
         round_id = 0
 
@@ -411,8 +512,21 @@ def run_server():
 
                 tell_hypothesis(store, current_rules_str, round_id)
 
+                # ===============================================
+                # CENTRALIZED TEST (REFERENCE)
+                # ================================================
+                Eplus_c, Eminus_c, score_c = central_test_hypothesis(current_rules_str,st.tester_full)
+
+                print(f"[CENTRAL TEST] Outcome = ({Eplus_c}, {Eminus_c}), score = {score_c:.4f}")
 
 
+                if not central_done and (Eplus_c, Eminus_c) == ("all", "none"):
+                    central_done = True
+                    central_round = round_id
+                    print(f"[CENTRAL] Converged at round {round_id}")
+                
+                if central_done:
+                    print(f"[CENTRAL] already converged (round {central_round})")
 
                 # If solver exhausted (or solution found), we still read client feedback for bookkeeping,
                 # but we may stop right after.

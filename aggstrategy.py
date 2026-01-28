@@ -124,13 +124,33 @@ def aggregate_popper(
     # 2) Generate ONE hypothesis (solver.get_model)
     # ---------------------------------------------------------
     model = solver.get_model()
+    
+    #if not model:
+    #    clause_size += 1
+    #    solver.update_number_of_literals(clause_size)
+    #    stats.update_num_literals(clause_size)
 
+    #        log.info(f"No model left, increasing clause size to {clause_size}")
+
+    #    return (        [np.array([], dtype="<U1000")],current_min_clause,           current_before,            clause_size,            solver,            False,            current_hypothesis,)
+    
     if not model:
         clause_size += 1
+
+        if clause_size >= settings.max_literals:
+            log.info(f"Reached max_literals={settings.max_literals}. Search exhausted.")
+            return (
+                [np.array([], dtype="<U1000")],
+                current_min_clause,
+                current_before,
+                clause_size,
+                solver,
+                True,              # <-- FLAG D’ARRÊT
+                current_hypothesis,
+            )
+
         solver.update_number_of_literals(clause_size)
         stats.update_num_literals(clause_size)
-
-        log.info(f"No model left, increasing clause size to {clause_size}")
 
         return (
             [np.array([], dtype="<U1000")],
@@ -142,6 +162,7 @@ def aggregate_popper(
             current_hypothesis,
         )
 
+
     # Decode hypothesis
     current_rules, before, min_clause = generate_program(model)
 
@@ -152,7 +173,7 @@ def aggregate_popper(
     # 3) Solution check (Popper stopping condition)
     # ---------------------------------------------------------
     if has_feedback and outcome == (Outcome.ALL, Outcome.NONE):
-        log.info("✅ Popper solution found")
+        log.info("Popper solution found")
 
         rules_arr = np.array(
             [Clause.to_code(r) for r in current_rules],

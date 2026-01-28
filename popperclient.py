@@ -89,7 +89,7 @@ def transform_rule_to_tester_format(rule_str):
     print(f"🔍 Transforming rule: {rule_str}")
 
     try:
-        # Split head and body correctly
+        # ✅ Split head and body correctly
         head_body = rule_str.split(":-")
         if len(head_body) != 2:
             raise ValueError(f"Invalid rule format: {rule_str}")
@@ -97,22 +97,22 @@ def transform_rule_to_tester_format(rule_str):
         head_str = head_body[0].strip()
         body_str = head_body[1].strip()
 
-        # *Fix: Properly extract body literals using regex**
+        # ✅ **Fix: Properly extract body literals using regex**
         body_literals = re.findall(r'\w+\(.*?\)', body_str)
 
-        print(f"Parsed head: {head_str}")
-        print(f"Parsed body literals: {body_literals}")
+        print(f"🔹 Parsed head: {head_str}")
+        print(f"🔹 Parsed body literals: {body_literals}")
 
-        # Convert to Literal objects (assuming `Literal.from_string` exists)
+        # ✅ Convert to Literal objects (assuming `Literal.from_string` exists)
         head = Literal.from_string(head_str)
         body = tuple(Literal.from_string(lit) for lit in body_literals)
 
         formatted_rule = (head, body)
-        print(f"Formatted rule: {formatted_rule}")
+        print(f"✅ Formatted rule: {formatted_rule}")
 
         return formatted_rule
     except Exception as e:
-        print(f"Error transforming rule: {rule_str} → {e}")
+        print(f"❌ Error transforming rule: {rule_str} → {e}")
         return None  # Return None to indicate failure
 
 
@@ -239,7 +239,7 @@ def test_hypothesis(rule_strings, tester):
         )
 
     except Exception as e:
-        print("Error while testing hypothesis:", e)
+        print("🔥 Error while testing hypothesis:", e)
         return ("x", "x")
 
 def popper_test_local(rule_strings, tester):
@@ -277,7 +277,7 @@ def popper_test_local(rule_strings, tester):
         return norm(Eplus), norm(Eminus)
 
     except Exception as e:
-        print("Local test failed:", e)
+        print("🔥 Local test failed:", e)
         return ("x", "x")
 
 
@@ -311,38 +311,27 @@ def transform_rule_to_tester_format(rule_str):
 
 def popper_test_hypothesis_final(hypothesis_strings, tester):
     try:
-        print("\n Starting local test of hypothesis...")
-        print("Hypothesis strings:")
-        for h in hypothesis_strings:
-            print(" ", h)
-
         rules = []
         for rs in hypothesis_strings:
             formatted = transform_rule_to_tester_format(rs)
-            if formatted is None:
-                print(f"Failed to transform rule: {rs}")
-                continue
-            rules.append(formatted)
+            if formatted is not None:
+                rules.append(formatted)
 
-        #print(f"Total rules parsed: {len(rules)}")
-
-        print(f"Total Pos examples: {len(tester.pos)}")
-        print(f"Total Neg examples: {len(tester.neg)}")
+        if not rules:
+            return ("none", "none", "0.0")
 
         cm = tester.test(rules)
-
-        print("Confusion matrix:", cm)
-
         Eplus, Eminus = decide_outcome(cm)
-        print(f"Outcome = ({Eplus}, {Eminus})")
         score = calc_score(cm)
 
-        return str(Eplus).lower(), str(Eminus).lower(), str(score).lower()
+        return (
+            str(Eplus).lower(),
+            str(Eminus).lower(),
+            str(score)
+        )
 
-    except Exception as e:
-        print("Error while testing hypothesis:")
-        traceback.print_exc()
-        return ("x", "x")
+    except Exception:
+        return ("none", "none", "0.0")
 
 
 def popper_test_local(rule_strings, tester):
@@ -381,45 +370,36 @@ import re
 
 
 def popper_read_hypothesis(sock, tour):
-    # get prgmlen(tour, N)
-    query = f" ask(prgmlen({tour})) "
-    sock.send(query.encode())
-    resp = sock.recv(1024).decode()
-    print("Raw prgmlen:", resp)
+    sock.send(f"ask(prgmlen({tour}))".encode())
+    try:
+        resp = sock.recv(1024).decode()
+    except socket.timeout:
+        return []
 
-    # parse N
     m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(\d+)\s*\)", resp)
     if not m:
-        print("Could not extract prgmlen — maybe the STORE replied differently?")
         return []
 
     nb_cl = int(m.group(1))
-    print(f"[CLIENT] nb_cl = {nb_cl}")
-
     clauses = []
 
     for i in range(nb_cl):
-        #query = f" get(prgm({tour},{i})) "
-        query = f" ask(prgm({tour},{i})) "
-
-        sock.send(query.encode())
-        resp = sock.recv(4096).decode()
-        print("Raw clause:", resp)
+        sock.send(f"ask(prgm({tour},{i}))".encode())
+        try:
+            resp = sock.recv(4096).decode()
+        except socket.timeout:
+            continue
 
         m = re.search(r"\{\s*(.*?)\s*\}", resp)
         if not m:
-            print(" Could not extract clause")
             continue
 
         rule = m.group(1).strip()
         if not rule.endswith("."):
             rule += "."
-
         clauses.append(rule)
 
     return clauses
-
-
 
 
 def run_client():
@@ -451,6 +431,7 @@ def run_client():
 
             # 2) LOCAL TESTING
             Eplus, Eminus, score = popper_test_hypothesis_final(hypothesis, tester)
+            #Eplus,Eminus = test_hypothesis(hypothesis, tester)
 
             print(f"Local outcome = ({Eplus}, {Eminus})")
          

@@ -85,10 +85,12 @@ class STORE:
                        pid.send((str(si_res) + " now present").encode("utf-8"))
                        (self.theWaitingList[functor]).remove((pid,si))         
     """
+    # Iterate over a copy to avoid skipping waiting processes
+    # when removing elements during wake-up
     def wakeUpOnNewSI(self, functor):
         if functor not in self.theWaitingList:
             return
-
+        # processus id , term ==> ajouter boolean qui precise si get ou ask 
         # itérer sur une COPIE
         waiting = list(self.theWaitingList[functor])
 
@@ -217,7 +219,7 @@ class STORE:
                     pid.send((str(si_res) + " present").encode("utf-8"))
                     return (bool_res,str(si_res))
                 else:
-                    self.insertPid(functor,si,pid)
+                    self.insertPid(functor,si,pid) # ajouter le boolean qui insiste du fait que c'st un ask, pareil pour le get 
                     return (False, "ask(" + str(si) +") failed")
             else: 
                 self.insertPid(functor,si,pid)                
@@ -226,9 +228,15 @@ class STORE:
 
     # function reset_store
 
+    def reset_storeold(self,pid):
+        self.theStore = {}
+        #self.theWaitingList = {}
+        pid.send(("store reset").encode("utf-8"))
+        return (True, "store reset")
+    
     def reset_store(self,pid):
         self.theStore = {}
-        self.theWaitingList = {}
+        #self.theWaitingList = {}
         pid.send(("store reset").encode("utf-8"))
         return (True, "store reset")
     
@@ -280,9 +288,36 @@ class STORE:
     # --------------------------
     #
     # Takes a si-term from the store and deletes it if it exists.
-
-            
     def get(self, functor, si, pid):
+        with self.lock:
+            if functor in self.theStore.keys():
+                bool_res, si_res = self.is_si_in_dict(si, (self.theStore)[functor])
+                if bool_res:
+                    self.theStore[functor][si_res] = self.theStore[functor][si_res] - 1
+                    
+                    if self.theStore[functor][si_res] == 0:
+                        del self.theStore[functor][si_res]
+
+                     # delete functor if empty
+                    if not self.theStore[functor]:
+                        del self.theStore[functor]
+                            
+                     # wake up nask's list
+                    self.wakeUpNOnSI(functor)                     
+                    
+                    pid.send((str(si_res) + " successfully got").encode("utf-8"))
+                    return (True, str(si_res) + " successfully got")
+                else:
+                    self.insertPid(functor, si, pid)
+                    return (False, "get(" + str(si) + ") failed")
+            else:
+                self.insertPid(functor, si, pid)
+                return (False, "get(" + str(si) + ") failed")
+            
+            
+            
+            
+    def getold(self, functor, si, pid):
         with self.lock:
             if functor in self.theStore.keys():
                 bool_res, si_res = self.is_si_in_dict(si, (self.theStore)[functor])
