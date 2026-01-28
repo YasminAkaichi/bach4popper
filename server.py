@@ -357,18 +357,19 @@ def run_server():
             # ROUND 0: publish EMPTY program (no hypothesis)
             # Clients should respond with none/none and score=0
             # --------------------------------------------------
-            if round_id == 0 and outcome_glob is None:
-                print("Round 0: sending empty hypothesis (prgmlen=0) to bootstrap outcomes.")
+            #if round_id == 0 and outcome_glob is None:
+                #print("Round 0: sending empty hypothesis (prgmlen=0) to bootstrap outcomes.")
                 #reset_store(store)
-                tell_empty_hypothesis(store, round_id)
+            #    tell_empty_hypothesis(store, round_id)
 
-            else:
+            #else:
                 # ================================
                 # 1) POPPER STEP (server-side)
                 # ================================
-                print("SERVER feeding outcome to Popper:", outcome_glob)
+            
+            print("SERVER feeding outcome to Popper:", outcome_glob)
 
-                rules_arr, current_min_clause, current_before, current_clause_size, solver, solved, new_rules = aggregate_popper(
+            rules_arr, current_min_clause, current_before, current_clause_size, solver, solved, new_rules = aggregate_popper(
                     outcome_glob,
                     st.settings,
                     st.solver,
@@ -381,11 +382,11 @@ def run_server():
                     st.current_hypothesis,
                     st.current_clause_size
                 )
-                search_exhausted = solved
-                st.current_min_clause = current_min_clause
-                st.current_before = current_before
-                st.current_clause_size = current_clause_size
-                st.solver = solver
+            search_exhausted = solved
+            st.current_min_clause = current_min_clause
+            st.current_before = current_before
+            st.current_clause_size = current_clause_size
+            st.solver = solver
 
                 # Update current hypothesis if non-empty
                 #raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
@@ -399,25 +400,25 @@ def run_server():
                 # Publish hypothesis to store
                 #tell_hypothesis(store, rules_str, round_id)
 
-                raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
-                current_rules_str = [normalize_rule_for_store(r) for r in raw_rules]
+            raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
+            current_rules_str = [normalize_rule_for_store(r) for r in raw_rules]
 
-                if raw_rules:
-                    st.current_hypothesis = new_rules
+            if raw_rules:
+                st.current_hypothesis = new_rules
 
-                print("Generated hypothesis:", current_rules_str)
+            print("Generated hypothesis:", current_rules_str)
                 
                 #reset_store(store)
 
-                tell_hypothesis(store, current_rules_str, round_id)
+            tell_hypothesis(store, current_rules_str, round_id)
 
 
 
 
                 # If solver exhausted (or solution found), we still read client feedback for bookkeeping,
                 # but we may stop right after.
-                if solved and outcome_glob != ("all", "none"):
-                    print("Popper search exhausted (or stopping flag). Will fallback to best hypothesis after reading scores.")
+            if solved and outcome_glob != ("all", "none"):
+                print("Popper search exhausted (or stopping flag). Will fallback to best hypothesis after reading scores.")
 
             # ================================
             # 2) Read outcomes (+score) from clients

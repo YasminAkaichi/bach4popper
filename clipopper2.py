@@ -25,7 +25,8 @@ import traceback
 #settings = Settings(bias_file, ex_file, bk_file)
 #tester = Tester(settings)
 #stats  = Stats(log_best_programs=settings.info)
-
+DATASET_PATH = "datasets/part2"
+CLIENT_ID = "2"
 from parser import Parser
 
 def parse_rule(rule_str):
@@ -73,7 +74,7 @@ def cli_prompt():
 """)
 
 
-def initialisation():
+def initialisationold():
     global client_id, path_dir
     print("Please introduce ... ")
     client_id = input("- the number to identify the client: ")
@@ -84,6 +85,19 @@ def initialisation():
     tester = Tester(settings)
     stats = Stats(log_best_programs=settings.info)
     settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
+
+def initialisation():
+    global client_id, path_dir
+    client_id = CLIENT_ID
+    path_dir = DATASET_PATH
+
+    print(f"[CLIENT {client_id}] Using dataset {path_dir}")
+
+    bk, ex, bias = load_kbpath(path_dir)
+    settings = Settings(bias, ex, bk)
+    tester = Tester(settings)
+    settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
+    print(f"[CLIENT {client_id}] #POS={len(tester.pos)} #NEG={len(tester.neg)}")
 
 def transform_rule_to_tester_format(rule_str):
     print(f"🔍 Transforming rule: {rule_str}")
