@@ -64,8 +64,136 @@ def aggregate_outcomes(outcomes):
 #   FILP Distributed Popper Step (Server-Side)
 # ------------------------------------------------------
 
-
 def aggregate_popper(
+    outcome,                 # (Eplus, Eminus) or (None, None)
+    settings,
+    solver,
+    grounder,
+    constrainer,
+    tester,                  # StructuralTester
+    stats,
+    current_min_clause,
+    current_before,
+    current_hypothesis,      # dernier programme généré (structure Popper)
+    clause_size,
+):
+    """
+    One federated Popper step.
+    Faithful to centralized Popper semantics.
+
+    Returns ALWAYS the same 7 values:
+      (rules_arr, min_clause, before, clause_size, solver, exhausted, current_hypothesis)
+    """
+
+    # =========================================================
+    # 0) STOP CONDITION — solution found at previous round
+    # =========================================================
+    if outcome == (Outcome.ALL, Outcome.NONE) and current_hypothesis is not None:
+        # Solution is the PREVIOUS hypothesis
+        rules_arr = np.array(
+            [Clause.to_code(r) for r in current_hypothesis],
+            dtype="<U1000",
+        )
+        return (
+            [rules_arr],
+            current_min_clause,
+            current_before,
+            clause_size,
+            solver,
+            True,                 # exhausted = True ⇒ stop server loop
+            current_hypothesis,
+        )
+
+    has_feedback = outcome != (None, None)
+
+    # =========================================================
+    # 1) ADD CONSTRAINTS from previous hypothesis (if any)
+    # =========================================================
+    if has_feedback and current_hypothesis is not None:
+        constraints = build_rules(
+            settings=settings,
+            stats=stats,
+            constrainer=constrainer,
+            tester=tester,                # structural only
+            program=current_hypothesis,
+            before=current_before,
+            min_clause=current_min_clause,
+            outcome=outcome,
+        )
+
+        grounded = ground_rules(
+            stats,
+            grounder,
+            solver.max_clauses,
+            solver.max_vars,
+            constraints,
+        )
+
+        solver.add_ground_clauses(grounded)
+
+    # =========================================================
+    # 2) GENERATE ONE MODEL (exactly one Popper iteration)
+    # =========================================================
+    model = solver.get_model()
+
+    # =========================================================
+    # 3) NO MODEL → increase clause size or exhaust search
+    # =========================================================
+    if not model:
+        next_clause_size = clause_size + 1
+
+        # --- Search space exhausted ---
+        if next_clause_size > settings.max_literals:
+            return (
+                [np.array([], dtype="<U1000")],   # empty hypothesis
+                current_min_clause,
+                current_before,
+                clause_size,
+                solver,
+                True,                             # exhausted
+                current_hypothesis,
+            )
+
+        # --- Increase program size (Popper-style) ---
+        solver.update_number_of_literals(next_clause_size)
+        stats.update_num_literals(next_clause_size)
+
+        return (
+            [np.array([], dtype="<U1000")],       # no hypothesis this round
+            current_min_clause,
+            current_before,
+            next_clause_size,
+            solver,
+            False,                                # not exhausted
+            current_hypothesis,
+        )
+
+    # =========================================================
+    # 4) DECODE NEW PROGRAM
+    # =========================================================
+    new_hypothesis, before, min_clause = generate_program(model)
+
+    rules_arr = np.array(
+        [Clause.to_code(r) for r in new_hypothesis],
+        dtype="<U1000",
+    )
+
+    # =========================================================
+    # 5) NORMAL CONTINUATION — program to be tested by clients
+    # =========================================================
+    return (
+        [rules_arr],
+        min_clause,
+        before,
+        clause_size,
+        solver,
+        False,                # not exhausted
+        new_hypothesis,
+    )
+
+
+
+def aggregate_popper2FEB(
     outcome,                 # (ε⁺, ε⁻) or (None, None)
     settings,
     solver,

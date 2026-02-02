@@ -24,7 +24,6 @@ max_clauses(4).
 max_vars(5).
 max_body(7).
 
-
 head_pred(next_score,3).
 body_pred(wins,2).
 body_pred(my_true_score,3).

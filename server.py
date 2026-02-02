@@ -318,6 +318,11 @@ def reset_store(store):
 # ================================
 #   MAIN LOOP
 # ================================
+def stop_timer(start_time):
+    end_time = time.time()
+    return end_time, end_time - start_time
+
+
 
 def run_server():
     cli_prompt()
@@ -335,7 +340,11 @@ def run_server():
     best_round = None
     current_rules_str = []
     search_exhausted = False
-    MAX_ROUNDS = 8000
+    MAX_ROUNDS = 15000
+    start_time = None 
+    end_time = None 
+    converged = False 
+    convergence_round = None
     try:
         round_id = 0
 
@@ -366,7 +375,8 @@ def run_server():
                 # ================================
                 # 1) POPPER STEP (server-side)
                 # ================================
-            
+            if round_id == 0:
+                start_time = time.time()
             print("SERVER feeding outcome to Popper:", outcome_glob)
 
             rules_arr, current_min_clause, current_before, current_clause_size, solver, solved, new_rules = aggregate_popper(
@@ -452,6 +462,10 @@ def run_server():
                     #print("BEST hypothesis:", best_rules_str)
                 else:
                     print("No best hypothesis found.")
+
+                #end_time = time.time()
+                end_time, elapsed_time = stop_timer(start_time)
+                print(f"Converged in {convergence_round} rounds, {elapsed_time:.2f}s")
                 store.send(b"close")
                 store.recv(1024)
                 break
@@ -462,6 +476,13 @@ def run_server():
             # (A) Perfect global solution
             if outcome_glob == ("all", "none"):
                 print("Global solution found (ALL/NONE). Stopping.")
+                
+                converged = True
+                convergence_round = round_id
+                end_time = time.time()
+                end_time, elapsed_time = stop_timer(start_time)
+                print(f"Converged in {convergence_round} rounds, {elapsed_time:.2f}s")
+    
                 store.send(b"close")
                 store.recv(1024)
                 break
@@ -486,6 +507,12 @@ def run_server():
                 print(f"Max rounds reached. Best was round {best_round} with avg_score={best_avg_score:.4f} and best hypothesis {best_rules_str}")
                 #print(f"BEST round {best_round}, score={best_avg_score:.4f}")
                 #print("BEST hypothesis:", best_rules_str)
+                converged = False
+                convergence_round = round_id
+                end_time = time.time()
+                end_time, elapsed_time = stop_timer(start_time)
+                print(f"Converged in {convergence_round} rounds, {elapsed_time:.2f}s")
+
                 store.send(b"close")
                 store.recv(1024)
                 break

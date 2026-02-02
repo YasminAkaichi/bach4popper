@@ -84,11 +84,22 @@ def count_pos_neg_in_file(ex_file: str):
                 neg += 1
     return pos, neg
 
+CLIENT_ID = 2
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_p2"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part2"
+# DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part2"
+
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
+
+
 def initialisation():
-    global client_id, path_dir
+    #global client_id, path_dir
     print("Please introduce ... ")
-    client_id = input("- the number to identify the client: ")
-    path_dir = input("- the path to example files (folder): ")
+    #client_id = input("- the number to identify the client: ")
+    #path_dir = input("- the path to example files (folder): ")
+    client_id = int(CLIENT_ID)
+    path_dir = DATASET_PATH
+    
     #LOAD PROLOG BACKGROUND + EXAMPLES
     bk, ex, bias = load_kbpath(path_dir)
     settings = Settings(bias, ex, bk)
@@ -100,6 +111,7 @@ def initialisation():
     file_pos, file_neg = count_pos_neg_in_file(ex)
     print(f"[CLIENT {client_id}] FILE counts   pos={file_pos} neg={file_neg}")
     print(f"[CLIENT {client_id}] TESTER counts pos={len(tester.pos)} neg={len(tester.neg)}")
+    return client_id, path_dir, settings, tester, stats
 
 
 
@@ -438,78 +450,102 @@ def popper_read_hypothesis(sock, tour):
 
     return clauses
 
+def is_final_round(sock, tour):
+    sock.send(f"ask(final({tour}))".encode())
+    resp = sock.recv(1024).decode()
+    return "final" in resp
 
 
 
 def run_client():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect(("127.0.0.1", 8000))
-    finish = False
-    hypothesis = []
 
     try:
         cli_prompt()
-        initialisation()
+        client_id, path_dir, settings, tester, stats = initialisation()
 
-        # Load ILP data
-        bk_file, ex_file, bias_file = load_kbpath(path_dir)
-        settings = Settings(bias_file, ex_file, bk_file)
-        tester = Tester(settings)
-        settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
         tour = 0
-        stats  = Stats(log_best_programs=settings.info)
+        final_round = False
+
         while True:
-            msg = f"ask(round({tour}))"
-            sock.send(msg.encode())
-            sock.recv(1024)
-            # 1) RECEIVE RULES
-            hypothesis = popper_read_hypothesis(sock,tour)
+            # --------------------------------------------------
+            # 1) Ask for current round info
+            # --------------------------------------------------
+            sock.send(f"ask(round({tour}))".encode())
+            resp = sock.recv(1024).decode()
+
+            # --------------------------------------------------
+            # 2) Detect FINAL round
+            # --------------------------------------------------
+            if resp.startswith("final("):
+                print("\n🟥 FINAL round detected")
+                final_round = True
+            else:
+                final_round = False
+
+            # --------------------------------------------------
+            # 3) Receive hypothesis
+            # --------------------------------------------------
+            hypothesis = popper_read_hypothesis(sock, tour)
+
             print("\nReceived hypothesis:")
             for h in hypothesis:
                 print("   ", h)
 
-            # 2) LOCAL TESTING
-            Eplus, Eminus, score = popper_test_hypothesis_final(hypothesis, tester)
+            # --------------------------------------------------
+            # 4) FINAL round → test & EXIT
+            # --------------------------------------------------
+            if final_round:
+                print("\n🔍 Final local evaluation")
 
-            print(f"Local outcome = ({Eplus}, {Eminus})")
-         
-            # 3) SEND OUTCOME TO SERVER
-            send_epair(sock, client_id,tour, Eplus, Eminus, score)
-            tour += 1
-            #finish = check_finish()
+                rules = [
+                    transform_rule_to_tester_format(r)
+                    for r in hypothesis
+                ]
 
-    except Exception as e:
-        print("Error:", e)
+                cm = tester.test(rules)
+                tp, fn, tn, fp = cm
 
-    finally:
-        try:
-            out_metrics = os.environ.get(
-                "OUT_METRICS",
-                f"client_{client_id}_metrics.json"
+                # Metrics (Popper-style)
+                accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+                print("Confusion matrix:", cm)
+                print(f"Accuracy: {accuracy:.4f}")
+                print(f"Recall:   {recall:.4f}")
+
+                break   # ✅ EXIT CLIENT CLEANLY
+
+            # --------------------------------------------------
+            # 5) Normal round → local test
+            # --------------------------------------------------
+            Eplus, Eminus, score = popper_test_hypothesis_final(
+                hypothesis, tester
             )
 
-            data = {
-                "run_id": int(os.environ.get("RUN_ID", "-1")),
-                "client_id": int(client_id),
-                "last_tour": tour,
-                "last_outcome": [Eplus, Eminus],
-                "last_score": score,
-            }
+            print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
 
-            with open(out_metrics, "w") as f:
-                json.dump(data, f, indent=2)
+            # --------------------------------------------------
+            # 6) Send feedback
+            # --------------------------------------------------
+            send_epair(sock, client_id, tour, Eplus, Eminus, score)
 
-            print(f"[CLIENT {client_id}] Metrics written to {out_metrics}")
+            tour += 1
 
-        except Exception as e:
-            print(f"[CLIENT {client_id}] Failed to write metrics:", e)
+    except Exception as e:
+        print("Client error:", e)
 
+    finally:
         sock.close()
         print("Connection closed.")
 
 
+#myparser = Parser()
+#client_id = "0"
+#path_dir = "."
 
-myparser = Parser()
-client_id = "0"
-path_dir = "."
-run_client()
+#run_client()
+
+if __name__ == "__main__":
+    run_client()

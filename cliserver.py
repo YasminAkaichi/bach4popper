@@ -9,8 +9,26 @@ import time
 import numpy as np
 from popper.structural_tester import StructuralTester
 
-from popper.loop import decide_outcome, calc_score
-import traceback
+from popper.util import load_kbpath
+
+NB_CLIENTS = 3
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains"
+
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer"
+
+import socket
+from popper.util import Settings, Stats
+from popper.asp import ClingoSolver, ClingoGrounder
+from popper.constrain import Constrain
+from popper.tester import Tester
+from popper.core import Clause
+from aggstrategy import aggregate_outcomes, aggregate_popper
+import time
+import numpy as np
+from popper.structural_tester import StructuralTester
+
 from popper.util import load_kbpath
 # ================================
 #    GLOBAL STATE
@@ -52,14 +70,14 @@ def cli_prompt():
 
 def initialisation():
     print("Please introduce ...")
-    nb_client = int(input("- number of Popper clients: "))
-    path_dir = input("- path to BK/Examples (folder): ")
+    nb_client = NB_CLIENTS 
+    path_dir = DATASET_PATH
     return nb_client,path_dir
 
 # ================================
 #   POPPER INITIALISE
 # ================================
-def popper_initialisation_old(path_dir):
+def popper_initialisation(path_dir):
     #global settings, stats, solver, grounder, constrainer, tester
     #global current_hypothesis, current_before, current_min_clause, current_clause_size
      
@@ -70,8 +88,8 @@ def popper_initialisation_old(path_dir):
     # Here we assume bias.pl is inside that folder
     #bias_file = f"{path_dir}/bias.pl"
     
-    kbpath = f"{path_dir}"
-    _, _, bias_file = load_kbpath(kbpath)
+    #kbpath = f"{path_dir}"
+    _, _, bias_file = load_kbpath(path_dir)
     settings = Settings(bias_file, None, None)
     stats = Stats(log_best_programs=settings.info)
     solver = ClingoSolver(settings)
@@ -87,46 +105,6 @@ def popper_initialisation_old(path_dir):
     #state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_before,current_min_clause,current_clause_size,current_hypothesis)
     state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_min_clause, current_before, current_clause_size, current_hypothesis)
     return state 
-
-
-def popper_initialisation(path_dir):
-    print("Initialising Distributed FILP...")
-
-    # ========== FEDERATED / STRUCTURAL PART ==========
-    kbpath = f"{path_dir}"
-    _, _, bias_file = load_kbpath(kbpath)
-
-    settings = Settings(bias_file, None, None)
-    stats = Stats(log_best_programs=settings.info)
-    solver = ClingoSolver(settings)
-    grounder = ClingoGrounder()
-    constrainer = Constrain()
-    tester_structural = StructuralTester()
-
-    # ========== CENTRALIZED TESTING PART ==========
-    
-    bk_file, ex_file, bias_file = load_kbpath(kbpath)
-    settings_full = Settings(bias_file, ex_file, bk_file)
-    tester_full = Tester(settings_full)
-
-    state = FILPServerState(
-        settings=settings,
-        solver=solver,
-        grounder=grounder,
-        constrainer=constrainer,
-        tester=tester_structural,
-        stats=stats,
-        min_clause=0,
-        before=None,
-        clause_size=0,
-        hypothesis=None
-    )
-
-    # AJOUT IMPORTANT
-    state.tester_full = tester_full
-
-    return state
-
 
 def convert_to_blpy(rule):
     r = rule.replace(" ", "")
@@ -360,66 +338,18 @@ def reset_store(store):
 # ================================
 #   MAIN LOOP
 # ================================
-
-
-from popper.core import Clause, Literal
-import re
-
-def transform_rule_to_tester_format(rule_str):
-    head_body = rule_str.split(":-")
-    if len(head_body) != 2:
-        raise ValueError(f"Invalid rule format: {rule_str}")
-
-    head_str = head_body[0].strip()
-    body_str = head_body[1].strip()
-
-    body_literals = re.findall(r'\w+\(.*?\)', body_str)
-
-    head = Literal.from_string(head_str)
-    body = tuple(Literal.from_string(lit) for lit in body_literals)
-
-    return (head, body)
-
-def central_test_hypothesis(hypothesis_strings, tester):
-    try:
-        print("\n Starting local test of hypothesis...")
-        print("Hypothesis strings:")
-        for h in hypothesis_strings:
-            print(" ", h)
-
-        rules = []
-        for rs in hypothesis_strings:
-            formatted = transform_rule_to_tester_format(rs)
-            if formatted is None:
-                print(f"Failed to transform rule: {rs}")
-                continue
-            rules.append(formatted)
-
-        #print(f"Total rules parsed: {len(rules)}")
-
-        #print(f"Total Pos examples: {len(tester.pos)}")
-        #print(f"Total Neg examples: {len(tester.neg)}")
-
-        cm = tester.test(rules)
-
-        print("Confusion matrix:", cm)
-
-        Eplus, Eminus = decide_outcome(cm)
-        print(f"Outcome = ({Eplus}, {Eminus})")
-        score = calc_score(cm)
-
-        return str(Eplus).lower(), str(Eminus).lower(), float(score)
-
-    except Exception as e:
-        print("Error while testing hypothesis:")
-        traceback.print_exc()
-        return ("x", "x")
-
+def stop_timer(start_time):
+    end_time = time.time()
+    return end_time, end_time - start_time
 
 
 
 def run_server():
     cli_prompt()
+
+    # --------------------------------------------------
+    # 0) Initialisation
+    # --------------------------------------------------
     nb_client, path_dir = initialisation()
     st = popper_initialisation(path_dir)
 
@@ -427,190 +357,211 @@ def run_server():
     store.connect(("127.0.0.1", 8000))
     print("Connected to STORE.")
 
-    # Global symbolic feedback from clients
-    outcome_glob = None  # will become ("none","none") after round 0
+    # Popper-style global feedback
+    outcome_glob = (None, None)
+
+    # Bookkeeping (equivalent to Stats)
     best_avg_score = float("-inf")
     best_rules_str = None
     best_round = None
-    current_rules_str = []
-    search_exhausted = False
-    MAX_ROUNDS = 8000
-    central_done = False
-    central_round = None
+
+    round_id = 0
+    start_time = time.time()
+    TIMEOUT = 600
+
     try:
-        round_id = 0
-
         while True:
-
-
-            print(f"\n========== ROUND {round_id} ==========")
-            reset_store(store)
-            #reset_msg = f"reset"
-            #store.send(reset_msg.encode())
-            #store.recv(1024)
-            #reset_store(store)
-            #print("fin reset")
-            msg = f"tell(round({round_id}))"
-            store.send(msg.encode())
-            store.recv(1024)
+            elapsed = time.time() - start_time
+            print("\n" + "=" * 50)
+            print(f"[Popper] Program #{round_id}")
+            print(f"[Time] Elapsed: {elapsed:.2f}s")
+            print(f"[State] clause_size={st.current_clause_size}")
+            print("=" * 50)
 
             # --------------------------------------------------
-            # ROUND 0: publish EMPTY program (no hypothesis)
-            # Clients should respond with none/none and score=0
+            # 1) ONE Popper step (federated)
             # --------------------------------------------------
-            #if round_id == 0 and outcome_glob is None:
-            #    print("Round 0: sending empty hypothesis (prgmlen=0) to bootstrap outcomes.")
-                #reset_store(store)
-            #    tell_empty_hypothesis(store, round_id)
+            (
+                rules_arr,
+                min_clause,
+                before,
+                clause_size,
+                solver,
+                exhausted,
+                new_hypothesis,
+            ) = aggregate_popper(
+                outcome_glob,
+                st.settings,
+                st.solver,
+                st.grounder,
+                st.constrainer,
+                st.tester,
+                st.stats,
+                st.current_min_clause,
+                st.current_before,
+                st.current_hypothesis,
+                st.current_clause_size,
+            )
 
-            #else:
-                # ================================
-                # 1) POPPER STEP (server-side)
-                # ================================
-            print("SERVER feeding outcome to Popper:", outcome_glob)
-
-            rules_arr, current_min_clause, current_before, current_clause_size, solver, solved, new_rules = aggregate_popper(
-                    outcome_glob,
-                    st.settings,
-                    st.solver,
-                    st.grounder,
-                    st.constrainer,
-                    st.tester,
-                    st.stats,
-                    st.current_min_clause,
-                    st.current_before,
-                    st.current_hypothesis,
-                    st.current_clause_size
-                )
-            search_exhausted = solved
-            st.current_min_clause = current_min_clause
-            st.current_before = current_before
-            st.current_clause_size = current_clause_size
+            # Update server state
+            st.current_min_clause = min_clause
+            st.current_before = before
+            st.current_clause_size = clause_size
             st.solver = solver
 
-                # Update current hypothesis if non-empty
-                #raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
-                #rules_str = [normalize_rule_for_store(r) for r in raw_rules]
+            # --------------------------------------------------
+            # 2) Stop if Popper search exhausted
+            # --------------------------------------------------
+            if exhausted:
+                elapsed = time.time() - start_time
+                print("\n🚫 SEARCH EXHAUSTED")
+                print(f"Total programs tested: {round_id}")
+                print(f"Total time: {elapsed:.2f}s")
 
-                #if raw_rules:
-                    #st.current_hypothesis = new_rules
+                if best_rules_str:
+                    print(
+                        f"Best hypothesis found at program #{best_round} "
+                        f"(avg_score={best_avg_score:.4f})"
+                    )
+                    for r in best_rules_str:
+                        print("  ", r)
+                else:
+                    print("No valid hypothesis found.")
 
-                #print("Generated hypothesis:", rules_str)
+                break
 
-                # Publish hypothesis to store
-                #tell_hypothesis(store, rules_str, round_id)
+            # --------------------------------------------------
+            # 3) Publish round + hypothesis to STORE
+            # --------------------------------------------------
+            reset_store(store)
 
-            raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
+            store.send(f"tell(round({round_id}))".encode())
+            store.recv(1024)
+
+            raw_rules = rules_arr[0].tolist() if len(rules_arr[0]) > 0 else []
             current_rules_str = [normalize_rule_for_store(r) for r in raw_rules]
 
-            if raw_rules:
-                st.current_hypothesis = new_rules
-
-            print("Generated hypothesis:", current_rules_str)
-                
-                #reset_store(store)
+            print("[Published hypothesis]")
+            if current_rules_str:
+                for r in current_rules_str:
+                    print("  ", r)
+            else:
+                print("  (empty hypothesis)")
 
             tell_hypothesis(store, current_rules_str, round_id)
 
-                # ===============================================
-                # CENTRALIZED TEST (REFERENCE)
-                # ================================================
-            Eplus_c, Eminus_c, score_c = central_test_hypothesis(current_rules_str,st.tester_full)
+            if raw_rules:
+                st.current_hypothesis = new_hypothesis
 
-            print(f"[CENTRAL TEST] Outcome = ({Eplus_c}, {Eminus_c}), score = {score_c:.4f}")
-
-
-            if not central_done and (Eplus_c, Eminus_c) == ("all", "none"):
-                central_done = True
-                central_round = round_id
-                print(f"[CENTRAL] Converged at round {round_id}")
-                
-            if central_done:
-                print(f"[CENTRAL] already converged (round {central_round})")
-
-                # If solver exhausted (or solution found), we still read client feedback for bookkeeping,
-                # but we may stop right after.
-            if solved and outcome_glob != ("all", "none"):
-                print("Popper search exhausted (or stopping flag). Will fallback to best hypothesis after reading scores.")
-
-            # ================================
-            # 2) Read outcomes (+score) from clients
-            # ================================
+            # --------------------------------------------------
+            # 4) Collect client ε-pairs (+ scores)
+            # --------------------------------------------------
             lepairs = get_epsilon_pairs(store, nb_client, round_id)
-
             parsed = [parse_epair_with_score(e) for e in lepairs]
-            print("PARSED outcomes+scores:", parsed)
 
-            # Aggregate symbolic outcomes
+            print("[Client feedback]")
+            for p in parsed:
+                print("  ", p)
+
             eps_pairs = [(ep, en) for (ep, en, _) in parsed]
             Eplus, Eminus = aggregate_outcomes(eps_pairs)
             outcome_glob = (Eplus, Eminus)
-            print("AGGREGATED outcome:", outcome_glob)
 
-            # Average score
+            print(f"[Aggregated outcome] {outcome_glob}")
+
+            # --------------------------------------------------
+            # 5) Score bookkeeping (best hypothesis)
+            # --------------------------------------------------
             scores = [s for (_, _, s) in parsed]
             avg_score = sum(scores) / len(scores) if scores else 0.0
-            print(f"AVG score this round: {avg_score:.4f}")
+            print(f"[Score] Avg score: {avg_score:.4f}")
 
-            if round_id != 0 and current_rules_str and avg_score > best_avg_score:
+            if raw_rules and avg_score > best_avg_score:
                 best_avg_score = avg_score
                 best_rules_str = list(current_rules_str)
                 best_round = round_id
-                print(f"New BEST hypothesis at round {best_round} with avg_score={best_avg_score:.4f}")
+                print(
+                    f" New BEST hypothesis at program #{best_round} "
+                    f"(avg_score={best_avg_score:.4f})"
+                )
 
-            if search_exhausted and outcome_glob != ("all", "none"):
-                print("Search exhausted. Returning BEST hypothesis.")
-                if best_rules_str:
-                    print(f"Best was round {best_round} with avg_score={best_avg_score:.4f} and best hypothesis {best_rules_str}")
-                    #print("BEST hypothesis:", best_rules_str)
-                else:
-                    print("No best hypothesis found.")
-                store.send(b"close")
-                store.recv(1024)
-                break
-
-            # ================================
-            # 3) Stop conditions
-            # ================================
-            # (A) Perfect global solution
+            # --------------------------------------------------
+            # 6) Stop if perfect solution (ALL/NONE)
+            # --------------------------------------------------
             if outcome_glob == ("all", "none"):
-                print("Global solution found (ALL/NONE). Stopping.")
-                store.send(b"close")
+                elapsed = time.time() - start_time
+                print("\nGLOBAL SOLUTION FOUND")
+                print(f"Program #{round_id}")
+                print(f"Total time: {elapsed:.2f}s")
+
+                for r in current_rules_str:
+                    print("  ", r)
+
+                reset_store(store)
+                store.send(f"tell(final({round_id}))".encode())
                 store.recv(1024)
+
+                # 2) Publish FINAL hypothesis
+                tell_hypothesis(store, current_rules_str, round_id)
+                
+                store.send(b"tell(done)")
+                store.recv(1024)
+                print("📤 Final hypothesis sent to clients.")
+
                 break
 
-            # (B) Search exhausted: detect it via clause_size > max_literals
-            #     We rely on the rule we added in aggregate_popper.
-            if st.current_clause_size > st.settings.max_literals:
-                print("Search exhausted (max_literals reached). Returning best hypothesis.")
+            # --------------------------------------------------
+            # 7) Global timeout (Popper-style safety)
+            # --------------------------------------------------
+            if time.time() - start_time > TIMEOUT:
+                print(f"⏱️ TIMEOUT ({TIMEOUT}s) reached.")
+
                 if best_rules_str:
-                    print(f"Best was round {best_round} with avg_score={best_avg_score:.4f} and best hypothesis {best_rules_str}")
-                    #print("BEST hypothesis:", best_rules_str)
-                else:
-                    print("No best hypothesis recorded (all rounds empty or scores missing).")
+                    print("📤 Sending FINAL hypothesis to clients")
 
-                store.send(b"close")
-                store.recv(1024)
-                break
+                    reset_store(store)
 
-            
-            if round_id >= MAX_ROUNDS:
-                #print("Max rounds reached. Returning BEST hypothesis.")
-                print(f"Max rounds reached. Best was round {best_round} with avg_score={best_avg_score:.4f} and best hypothesis {best_rules_str}")
-                #print(f"BEST round {best_round}, score={best_avg_score:.4f}")
-                #print("BEST hypothesis:", best_rules_str)
-                store.send(b"close")
-                store.recv(1024)
+                    store.send(f"tell(round({round_id}))".encode())
+                    store.recv(1024)
+
+                    tell_hypothesis(store, best_rules_str, round_id)
+
+                    store.send(f"tell(final({round_id}))".encode())
+                    store.recv(1024)
+
                 break
 
             round_id += 1
 
     except Exception as e:
-        print("Error:", e)
+        print("❌ Server error:", e)
 
     finally:
+        try:
+            store.send(b"close")
+            store.recv(1024)
+        except Exception:
+            pass
+
         store.close()
-        print("Connection to store closed.")
+
+        elapsed = time.time() - start_time
+        print("\n========== FINAL SUMMARY ==========")
+        print(f"Total programs tested: {round_id}")
+        print(f"Total execution time: {elapsed:.2f}s")
+
+        if best_rules_str:
+            print(
+                f"Best hypothesis found at program #{best_round} "
+                f"(avg_score={best_avg_score:.4f})"
+            )
+            for r in best_rules_str:
+                print("  ", r)
+        else:
+            print("No valid hypothesis found.")
+
+        print("Connection to STORE closed.")
+
 
 
 # ================================
