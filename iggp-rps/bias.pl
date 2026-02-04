@@ -22,7 +22,7 @@
 
 max_clauses(4).
 max_vars(5).
-max_body(7).
+max_body(4).
 
 head_pred(next_score,3).
 body_pred(wins,2).

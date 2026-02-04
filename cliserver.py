@@ -12,8 +12,8 @@ from popper.structural_tester import StructuralTester
 from popper.util import load_kbpath
 
 NB_CLIENTS = 3
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains"
 
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer"
@@ -124,7 +124,7 @@ def tell_hypothesis(store, hyp, tour):
 
     # prgmlen(tour, N)
     msg = f"tell(prgmlen({tour},{nb_cl}))"
-    print("📤 Sending:", msg)
+    print("Sending:", msg)
     store.send(msg.encode())
     store.recv(1024)
 
@@ -134,7 +134,7 @@ def tell_hypothesis(store, hyp, tour):
         payload = "{" + clean + "}"
 
         msg = f"tell(prgm({tour},{i},{payload}))"
-        print("📤 Sending:", msg)
+        print("Sending:", msg)
         store.send(msg.encode())
         store.recv(1024)
 
@@ -497,17 +497,20 @@ def run_server():
                 for r in current_rules_str:
                     print("  ", r)
 
-                reset_store(store)
+                # NE PAS reset_store ICI
+                # NE PAS renvoyer l’hypothèse (elle est déjà publiée)
+
+                # 1) annoncer que ce round est final
+                store.send(f"tell(round({round_id}))".encode())
+                store.recv(1024)
+
+                tell_hypothesis(store, current_rules_str, round_id)
+
+                # 2) signal de fin logique
                 store.send(f"tell(final({round_id}))".encode())
                 store.recv(1024)
 
-                # 2) Publish FINAL hypothesis
-                tell_hypothesis(store, current_rules_str, round_id)
-                
-                store.send(b"tell(done)")
-                store.recv(1024)
-                print("📤 Final hypothesis sent to clients.")
-
+                print("📤 Final signal sent to clients.")
                 break
 
             # --------------------------------------------------
@@ -534,7 +537,7 @@ def run_server():
             round_id += 1
 
     except Exception as e:
-        print("❌ Server error:", e)
+        print("Server error:", e)
 
     finally:
         try:

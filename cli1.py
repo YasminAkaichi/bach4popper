@@ -85,9 +85,9 @@ def count_pos_neg_in_file(ex_file: str):
     return pos, neg
 
 CLIENT_ID = 1
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_p1"
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part1"
-# DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part1"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part1"
 
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
 
@@ -455,9 +455,85 @@ def is_final_round(sock, tour):
     resp = sock.recv(1024).decode()
     return "final" in resp
 
-
-
 def run_client():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("127.0.0.1", 8000))
+
+    try:
+        cli_prompt()
+        client_id, path_dir, settings, tester, stats = initialisation()
+
+        tour = 0
+        final_round = False
+
+        while True:
+            # --------------------------------------------------
+            # 1) Ask for current round info
+            # --------------------------------------------------
+            sock.send(f"ask(round({tour}))".encode())
+            resp = sock.recv(1024).decode()
+
+            # --------------------------------------------------
+            # 2) Detect FINAL round
+            # --------------------------------------------------
+            if resp.strip().startswith("final("):
+                print("\n🟥 FINAL round detected")
+                final_round = True
+    
+
+            # --------------------------------------------------
+            # 3) Receive hypothesis
+            # --------------------------------------------------
+            hypothesis = popper_read_hypothesis(sock, tour)
+
+            print("\nReceived hypothesis:")
+            for h in hypothesis:
+                print("   ", h)
+
+            # --------------------------------------------------
+            # 4) FINAL round → test & EXIT
+            # --------------------------------------------------
+            if final_round:
+                print("\n🔍 Final local evaluation")
+
+                rules = [transform_rule_to_tester_format(r) for r in hypothesis]
+                cm = tester.test(rules)
+
+                tp, fn, tn, fp = cm
+                accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
+                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+
+                print("Confusion matrix:", cm)
+                print(f"Accuracy: {accuracy:.4f}")
+                print(f"Recall:   {recall:.4f}")
+
+                break
+
+            # --------------------------------------------------
+            # 5) Normal round → local test
+            # --------------------------------------------------
+            Eplus, Eminus, score = popper_test_hypothesis_final(
+                hypothesis, tester
+            )
+
+            print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
+
+            # --------------------------------------------------
+            # 6) Send feedback
+            # --------------------------------------------------
+            send_epair(sock, client_id, tour, Eplus, Eminus, score)
+
+            tour += 1
+
+    except Exception as e:
+        print("Client error:", e)
+
+    finally:
+        sock.close()
+        print("Connection closed.")
+
+
+def run_clientxx():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect(("127.0.0.1", 8000))
 

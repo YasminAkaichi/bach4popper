@@ -85,9 +85,10 @@ def count_pos_neg_in_file(ex_file: str):
     return pos, neg
 
 CLIENT_ID = 3
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_p3"
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part3"
-# DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part3"
+
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part3"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part3"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part3"
 
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
 
@@ -478,11 +479,10 @@ def run_client():
             # --------------------------------------------------
             # 2) Detect FINAL round
             # --------------------------------------------------
-            if resp.startswith("final("):
+            if resp.strip().startswith("final("):
                 print("\n🟥 FINAL round detected")
                 final_round = True
-            else:
-                final_round = False
+    
 
             # --------------------------------------------------
             # 3) Receive hypothesis
@@ -499,15 +499,10 @@ def run_client():
             if final_round:
                 print("\n🔍 Final local evaluation")
 
-                rules = [
-                    transform_rule_to_tester_format(r)
-                    for r in hypothesis
-                ]
-
+                rules = [transform_rule_to_tester_format(r) for r in hypothesis]
                 cm = tester.test(rules)
-                tp, fn, tn, fp = cm
 
-                # Metrics (Popper-style)
+                tp, fn, tn, fp = cm
                 accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
                 recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
 
@@ -515,7 +510,7 @@ def run_client():
                 print(f"Accuracy: {accuracy:.4f}")
                 print(f"Recall:   {recall:.4f}")
 
-                break   # ✅ EXIT CLIENT CLEANLY
+                break
 
             # --------------------------------------------------
             # 5) Normal round → local test

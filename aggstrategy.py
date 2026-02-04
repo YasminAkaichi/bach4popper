@@ -104,12 +104,14 @@ def aggregate_popper(
             current_hypothesis,
         )
 
-    has_feedback = outcome != (None, None)
-
+    #has_feedback = outcome != (None, None)
+    has_feedback = (outcome!= (None, None) and current_hypothesis is not None and stats.total_programs > 0)
     # =========================================================
     # 1) ADD CONSTRAINTS from previous hypothesis (if any)
     # =========================================================
-    if has_feedback and current_hypothesis is not None:
+    #if has_feedback and current_hypothesis is not None:
+
+    if has_feedback:
         constraints = build_rules(
             settings=settings,
             stats=stats,
@@ -172,7 +174,8 @@ def aggregate_popper(
     # 4) DECODE NEW PROGRAM
     # =========================================================
     new_hypothesis, before, min_clause = generate_program(model)
-
+    stats.total_programs += 1
+    
     rules_arr = np.array(
         [Clause.to_code(r) for r in new_hypothesis],
         dtype="<U1000",
