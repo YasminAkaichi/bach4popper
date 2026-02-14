@@ -84,9 +84,10 @@ def count_pos_neg_in_file(ex_file: str):
                 neg += 1
     return pos, neg
 
-CLIENT_ID = 1
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part1"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part1"
+CLIENT_ID = 1 
+
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part1"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part1"
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part1"
 
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
@@ -398,7 +399,8 @@ def popper_test_local(rule_strings, tester):
 
 
 def send_epair(sock, client_id, tour, Eplus, Eminus, score):
-    msg = f"tell(epair({tour},{client_id},{Eplus},{Eminus},{score}))"
+    score_int = int(float(score)) 
+    msg = f"tell(epair({tour},{client_id},{Eplus},{Eminus},{score_int}))"
     sock.send(msg.encode())
     sock.recv(1024)  # confirmation du store
 
@@ -412,14 +414,63 @@ import re
 
 
 def popper_read_hypothesis(sock, tour):
+    # 1) non bloquant : est-ce final ?
+    sock.send(f"in(prgmlen({tour},final))".encode())
+    is_final = sock.recv(1024).decode().strip().lower() == "true"
+
+    if is_final:
+        # final round => lire clauses jusqu'à échec
+        clauses = []
+        i = 0
+        while True:
+            sock.send(f"ask(prgm({tour},{i}))".encode())
+            resp = sock.recv(4096).decode()
+            if "failed" in resp or "wait" in resp:
+                break
+            m2 = re.search(r"\{\s*(.*?)\s*\}", resp)
+            if not m2:
+                break
+            rule = m2.group(1).strip()
+            if not rule.endswith("."):
+                rule += "."
+            clauses.append(rule)
+            i += 1
+        return clauses, "final"
+
+    # 2) sinon, round normal (bloquant)
+    sock.send(f"ask(prgmlen({tour}))".encode())
+    resp = sock.recv(1024).decode()
+
+    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(\w+|-?\d+)\s*\)", resp)
+    if not m:
+        return [], 0
+
+    nb_cl = int(m.group(1))
+    clauses = []
+    for i in range(nb_cl):
+        sock.send(f"ask(prgm({tour},{i}))".encode())
+        resp = sock.recv(4096).decode()
+        m2 = re.search(r"\{\s*(.*?)\s*\}", resp)
+        if m2:
+            rule = m2.group(1).strip()
+            if not rule.endswith("."):
+                rule += "."
+            clauses.append(rule)
+    return clauses, nb_cl
+
+
+def popper_read_hypothesis1513(sock, tour):
     # get prgmlen(tour, N)
     query = f" ask(prgmlen({tour})) "
     sock.send(query.encode())
     resp = sock.recv(1024).decode()
+
+    #si tour = 0 
+
     print("Raw prgmlen:", resp)
 
     # parse N
-    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(\d+)\s*\)", resp)
+    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(-?\d+)\s*\)", resp)
     if not m:
         print("Could not extract prgmlen — maybe the STORE replied differently?")
         return []
@@ -448,10 +499,10 @@ def popper_read_hypothesis(sock, tour):
 
         clauses.append(rule)
 
-    return clauses
+    return clauses, nb_cl
 
-def is_final_round(sock, tour):
-    sock.send(f"ask(final({tour}))".encode())
+def is_final_round(sock):
+    sock.send(f"ask(final({0}))".encode())
     resp = sock.recv(1024).decode()
     return "final" in resp
 
@@ -467,47 +518,24 @@ def run_client():
         final_round = False
 
         while True:
-            # --------------------------------------------------
-            # 1) Ask for current round info
-            # --------------------------------------------------
-            sock.send(f"ask(round({tour}))".encode())
-            resp = sock.recv(1024).decode()
+            hypothesis, nb_raw = popper_read_hypothesis(sock, tour)
 
-            # --------------------------------------------------
-            # 2) Detect FINAL round
-            # --------------------------------------------------
-            if resp.strip().startswith("final("):
-                print("\n🟥 FINAL round detected")
-                final_round = True
-    
+            # 🔴 FINAL
+            if nb_raw == "final":
+                print("\n🎉 FINAL round detected")
+                print("Final hypothesis:")
+                for h in hypothesis:
+                    print("  ", h)
+                break
 
-            # --------------------------------------------------
-            # 3) Receive hypothesis
-            # --------------------------------------------------
-            hypothesis = popper_read_hypothesis(sock, tour)
+            # 🟢 NORMAL
+            nb_cl = nb_raw
+          
 
             print("\nReceived hypothesis:")
             for h in hypothesis:
                 print("   ", h)
 
-            # --------------------------------------------------
-            # 4) FINAL round → test & EXIT
-            # --------------------------------------------------
-            if final_round:
-                print("\n🔍 Final local evaluation")
-
-                rules = [transform_rule_to_tester_format(r) for r in hypothesis]
-                cm = tester.test(rules)
-
-                tp, fn, tn, fp = cm
-                accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
-                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-
-                print("Confusion matrix:", cm)
-                print(f"Accuracy: {accuracy:.4f}")
-                print(f"Recall:   {recall:.4f}")
-
-                break
 
             # --------------------------------------------------
             # 5) Normal round → local test
@@ -529,7 +557,9 @@ def run_client():
         print("Client error:", e)
 
     finally:
-        sock.close()
+        #sock.close()
+        sock.send(b"close")
+        sock.recv(1024)
         print("Connection closed.")
 
 
@@ -548,53 +578,25 @@ def run_clientxx():
             # --------------------------------------------------
             # 1) Ask for current round info
             # --------------------------------------------------
-            sock.send(f"ask(round({tour}))".encode())
-            resp = sock.recv(1024).decode()
+            #sock.send(f"ask(round({tour}))".encode())
+            #resp = sock.recv(1024).decode()
 
-            # --------------------------------------------------
-            # 2) Detect FINAL round
-            # --------------------------------------------------
-            if resp.strip().startswith("final("):
-                print("\n🟥 FINAL round detected")
-                final_round = True
-    
+            
+            #print("Raw prgmlen:", resp)
 
-            # --------------------------------------------------
-            # 3) Receive hypothesis
-            # --------------------------------------------------
-            hypothesis = popper_read_hypothesis(sock, tour)
-
-            print("\nReceived hypothesis:")
-            for h in hypothesis:
-                print("   ", h)
-
-            # --------------------------------------------------
-            # 4) FINAL round → test & EXIT
-            # --------------------------------------------------
-            if final_round:
-                print("\n🔍 Final local evaluation")
-
-                rules = [transform_rule_to_tester_format(r) for r in hypothesis]
-                cm = tester.test(rules)
-
-                tp, fn, tn, fp = cm
-                accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
-                recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-
-                print("Confusion matrix:", cm)
-                print(f"Accuracy: {accuracy:.4f}")
-                print(f"Recall:   {recall:.4f}")
-                # close 
-                # 2) annoncer explicitement la fin
-                #sock.send(b"tell(done)")
-                #sock.recv(1024)
-
-                # 3) fermer proprement
-                #sock.send(b"close")
-                #sock.recv(1024)
-                #sock.close()
+            # 3) CAS FINAL
+         
+            hypothesis, nb_cl = popper_read_hypothesis(sock, tour)
+            
+            if nb_cl == "final":
+                print("\n🎉 FINAL round detected")
+                print("Final hypothesis:")
+                for h in hypothesis:
+                    print("   ", h)
                 break
 
+
+        
             # --------------------------------------------------
             # 5) Normal round → local test
             # --------------------------------------------------
@@ -609,12 +611,29 @@ def run_clientxx():
             # --------------------------------------------------
             send_epair(sock, client_id, tour, Eplus, Eminus, score)
 
-            tour += 1
+            # attendre que le prochain round soit publié
+            next_round = tour + 1
+
+            sock.send(f"ask(round({next_round}))".encode())
+            resp = sock.recv(1024).decode()
+
+            if "present" in resp:
+                tour = next_round
+            else:
+                print("No next round → server finished.")
+                break
 
     except Exception as e:
         print("Client error:", e)
 
     finally:
+        #sock.close()
+        #print("Connection closed.")
+        try:
+            sock.send(b"close")
+            sock.recv(1024)
+        except Exception:
+            pass
         sock.close()
         print("Connection closed.")
 

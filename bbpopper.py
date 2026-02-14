@@ -27,9 +27,18 @@ def handle_client(client_socket, addr):
     try:
         while True:
             # receive and print client messages
-            request = client_socket.recv(1024).decode("utf-8")
-            print("Launching parser for request")
+            #request = client_socket.recv(1024).decode("utf-8")
+            #print("Launching parser for request")
+            #print(request)
+            #ast = myparser.parse(request)
+            request = client_socket.recv(1024).decode("utf-8").strip()
+            if not request:
+                continue
+
+            print("\n--- RAW REQUEST --------------------------------")
             print(request)
+            print("------------------------------------------------")
+
             ast = myparser.parse(request)
             print(f"ast = {ast}")
             print("launching interpreter")

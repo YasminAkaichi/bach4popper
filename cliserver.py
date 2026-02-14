@@ -7,27 +7,19 @@ from popper.core import Clause
 from aggstrategy import aggregate_outcomes, aggregate_popper
 import time
 import numpy as np
-from popper.structural_tester import StructuralTester
-
+#from popper.structural_tester import StructuralTester
+from popper.tester import Tester
 from popper.util import load_kbpath
 
 NB_CLIENTS = 3
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains"
 
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer"
 
-import socket
-from popper.util import Settings, Stats
-from popper.asp import ClingoSolver, ClingoGrounder
-from popper.constrain import Constrain
-from popper.tester import Tester
-from popper.core import Clause
-from aggstrategy import aggregate_outcomes, aggregate_popper
-import time
-import numpy as np
-from popper.structural_tester import StructuralTester
+
+#from popper.structural_tester import StructuralTester
 
 from popper.util import load_kbpath
 # ================================
@@ -95,7 +87,7 @@ def popper_initialisation(path_dir):
     solver = ClingoSolver(settings)
     grounder = ClingoGrounder()
     constrainer = Constrain()
-    tester = StructuralTester()
+    tester = Tester(settings)
 
     current_hypothesis = None
     current_before = None
@@ -427,6 +419,8 @@ def run_server():
                         print("  ", r)
                 else:
                     print("No valid hypothesis found.")
+                store.send(f"tell(prgmlen({round_id},final))".encode())
+                store.recv(1024)
 
                 break
 
@@ -493,25 +487,28 @@ def run_server():
                 print("\nGLOBAL SOLUTION FOUND")
                 print(f"Program #{round_id}")
                 print(f"Total time: {elapsed:.2f}s")
-
                 for r in current_rules_str:
                     print("  ", r)
 
-                # NE PAS reset_store ICI
-                # NE PAS renvoyer l’hypothèse (elle est déjà publiée)
+                # republier proprement ce round comme FINAL
+                reset_store(store)
 
-                # 1) annoncer que ce round est final
                 store.send(f"tell(round({round_id}))".encode())
                 store.recv(1024)
 
+                # publier l'hypothèse (ça écrit prgmlen(round_id, N) + prgm(...))
                 tell_hypothesis(store, current_rules_str, round_id)
 
-                # 2) signal de fin logique
-                store.send(f"tell(final({round_id}))".encode())
+                # IMPORTANT: retirer prgmlen(round_id, N) pour éviter conflit de matching
+                store.send(f"get(prgmlen({round_id}))".encode())
                 store.recv(1024)
 
-                print("📤 Final signal sent to clients.")
+                # puis marquer final
+                store.send(f"tell(prgmlen({round_id},final))".encode())
+                store.recv(1024)
+
                 break
+
 
             # --------------------------------------------------
             # 7) Global timeout (Popper-style safety)
@@ -529,7 +526,12 @@ def run_server():
 
                     tell_hypothesis(store, best_rules_str, round_id)
 
-                    store.send(f"tell(final({round_id}))".encode())
+                    # retirer prgmlen(round_id, N)
+                    store.send(f"get(prgmlen({round_id}))".encode())
+                    store.recv(1024)
+
+                    # marquer final
+                    store.send(f"tell(prgmlen({round_id},final))".encode())
                     store.recv(1024)
 
                 break
@@ -541,6 +543,7 @@ def run_server():
 
     finally:
         try:
+            print("Sending close to STORE")
             store.send(b"close")
             store.recv(1024)
         except Exception:

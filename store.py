@@ -60,12 +60,15 @@ class STORE:
         self.lock = threading.Lock()
         self.parser = Parser()
         
-    def insertPid(self, functor, si, pid):
+    def insertPid(self, functor, si, pid, op):
 #        with self.lock:
             if functor in self.theWaitingList.keys():
-               self.theWaitingList[functor].append((pid,si))
+               #self.theWaitingList[functor].append((pid,si))
+               self.theWaitingList[functor].append((pid, si, op))
             else:
-               self.theWaitingList.update({ functor: [(pid,si)]})
+               #self.theWaitingList.update({ functor: [(pid,si)]})
+               self.theWaitingList[functor] = [(pid, si, op)]
+
 
 
     def insertNPid(self, functor, si, pid):
@@ -87,7 +90,7 @@ class STORE:
     """
     # Iterate over a copy to avoid skipping waiting processes
     # when removing elements during wake-up
-    def wakeUpOnNewSI(self, functor):
+    def wakeUpOnNewSIold(self, functor):
         if functor not in self.theWaitingList:
             return
         # processus id , term ==> ajouter boolean qui precise si get ou ask 
@@ -101,6 +104,27 @@ class STORE:
                     pid.send((str(si_res) + " now present").encode("utf-8"))
                     self.theWaitingList[functor].remove((pid, si))
 
+    def wakeUpOnNewSI(self, functor):
+        if functor not in self.theWaitingList:
+            return
+
+        waiting = list(self.theWaitingList[functor])
+        for pid, si, op in waiting:
+            if functor not in self.theStore:
+                continue
+            bool_res, si_res = self.is_si_in_dict(si, self.theStore[functor])
+            if bool_res:
+                if op == "ask":
+                    pid.send((str(si_res) + " present").encode("utf-8"))
+                elif op == "get":
+                    # retirer du store
+                    self.theStore[functor][si_res] -= 1
+                    if self.theStore[functor][si_res] == 0:
+                        del self.theStore[functor][si_res]
+                    if not self.theStore[functor]:
+                        del self.theStore[functor]
+                    pid.send((str(si_res) + " successfully got").encode("utf-8"))
+                self.theWaitingList[functor].remove((pid, si, op))
 
             
     # wakeUpNOnSI(functor)
@@ -219,10 +243,10 @@ class STORE:
                     pid.send((str(si_res) + " present").encode("utf-8"))
                     return (bool_res,str(si_res))
                 else:
-                    self.insertPid(functor,si,pid) # ajouter le boolean qui insiste du fait que c'st un ask, pareil pour le get 
+                    self.insertPid(functor,si,pid, "ask") # ajouter le boolean qui insiste du fait que c'st un ask, pareil pour le get 
                     return (False, "ask(" + str(si) +") failed")
             else: 
-                self.insertPid(functor,si,pid)                
+                self.insertPid(functor,si,pid, "ask")                
                 return (False, "ask(" + str(si) +") ff failed")
 
 
@@ -288,7 +312,7 @@ class STORE:
     # --------------------------
     #
     # Takes a si-term from the store and deletes it if it exists.
-    def get(self, functor, si, pid):
+    def get_manel(self, functor, si, pid):
         with self.lock:
             if functor in self.theStore.keys():
                 bool_res, si_res = self.is_si_in_dict(si, (self.theStore)[functor])
@@ -313,8 +337,37 @@ class STORE:
             else:
                 self.insertPid(functor, si, pid)
                 return (False, "get(" + str(si) + ") failed")
-            
-            
+
+    def get(self, functor, si, pid):
+        with self.lock:
+
+            # 🔴 1) Si functor absent → échec immédiat (non bloquant)
+            if functor not in self.theStore:
+                pid.send((f"get({si}) failed").encode("utf-8"))
+                return (False, f"get({si}) failed")
+
+            # 🔴 2) Exact match uniquement (PAS de partial_match ici)
+            if si not in self.theStore[functor]:
+                pid.send((f"get({si}) failed").encode("utf-8"))
+                return (False, f"get({si}) failed")
+
+            # 🔴 3) Décrémentation
+            self.theStore[functor][si] -= 1
+
+            # 🔴 4) Suppression si compteur = 0
+            if self.theStore[functor][si] == 0:
+                del self.theStore[functor][si]
+
+            # 🔴 5) Suppression du functor si vide
+            if not self.theStore[functor]:
+                del self.theStore[functor]
+
+            # 🔴 6) Réveiller nask
+            self.wakeUpNOnSI(functor)
+
+            pid.send((f"{si} successfully got").encode("utf-8"))
+            return (True, f"{si} successfully got")
+
             
             
     def getold(self, functor, si, pid):
