@@ -4,16 +4,12 @@
 # ------------------------------------------------------
 
 import socket
-from parser import Parser
-from data_structures import SI_PRGM
 from popper.tester import Tester
 from popper.core import Clause, Literal
 from popper.loop import decide_outcome, calc_score
 from popper.util import Settings, Stats
 from popper.util import load_kbpath
 import re
-import json 
-import os
 import traceback
 # ======================================================
 #  Helper: parse Popper rule string
@@ -107,7 +103,6 @@ def initialisation():
     tester = Tester(settings)
     stats = Stats(log_best_programs=settings.info)
     settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
-    # 🔎 DEBUG: compare FILE vs TESTER
     # 🔎 DEBUG: compare FILE vs TESTER
     file_pos, file_neg = count_pos_neg_in_file(ex)
     print(f"[CLIENT {client_id}] FILE counts   pos={file_pos} neg={file_neg}")
@@ -459,47 +454,7 @@ def popper_read_hypothesis(sock, tour):
     return clauses, nb_cl
 
 
-def popper_read_hypothesis1513(sock, tour):
-    # get prgmlen(tour, N)
-    query = f" ask(prgmlen({tour})) "
-    sock.send(query.encode())
-    resp = sock.recv(1024).decode()
 
-    #si tour = 0 
-
-    print("Raw prgmlen:", resp)
-
-    # parse N
-    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(-?\d+)\s*\)", resp)
-    if not m:
-        print("Could not extract prgmlen — maybe the STORE replied differently?")
-        return []
-
-    nb_cl = int(m.group(1))
-    print(f"[CLIENT] nb_cl = {nb_cl}")
-
-    clauses = []
-
-    for i in range(nb_cl):
-        #query = f" get(prgm({tour},{i})) "
-        query = f" ask(prgm({tour},{i})) "
-
-        sock.send(query.encode())
-        resp = sock.recv(4096).decode()
-        print("Raw clause:", resp)
-
-        m = re.search(r"\{\s*(.*?)\s*\}", resp)
-        if not m:
-            print(" Could not extract clause")
-            continue
-
-        rule = m.group(1).strip()
-        if not rule.endswith("."):
-            rule += "."
-
-        clauses.append(rule)
-
-    return clauses, nb_cl
 
 def is_final_round(sock):
     sock.send(f"ask(final({0}))".encode())
@@ -563,86 +518,7 @@ def run_client():
         print("Connection closed.")
 
 
-def run_clientxx():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(("127.0.0.1", 8000))
 
-    try:
-        cli_prompt()
-        client_id, path_dir, settings, tester, stats = initialisation()
-
-        tour = 0
-        final_round = False
-
-        while True:
-            # --------------------------------------------------
-            # 1) Ask for current round info
-            # --------------------------------------------------
-            #sock.send(f"ask(round({tour}))".encode())
-            #resp = sock.recv(1024).decode()
-
-            
-            #print("Raw prgmlen:", resp)
-
-            # 3) CAS FINAL
-         
-            hypothesis, nb_cl = popper_read_hypothesis(sock, tour)
-            
-            if nb_cl == "final":
-                print("\n🎉 FINAL round detected")
-                print("Final hypothesis:")
-                for h in hypothesis:
-                    print("   ", h)
-                break
-
-
-        
-            # --------------------------------------------------
-            # 5) Normal round → local test
-            # --------------------------------------------------
-            Eplus, Eminus, score = popper_test_hypothesis_final(
-                hypothesis, tester
-            )
-
-            print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
-
-            # --------------------------------------------------
-            # 6) Send feedback
-            # --------------------------------------------------
-            send_epair(sock, client_id, tour, Eplus, Eminus, score)
-
-            # attendre que le prochain round soit publié
-            next_round = tour + 1
-
-            sock.send(f"ask(round({next_round}))".encode())
-            resp = sock.recv(1024).decode()
-
-            if "present" in resp:
-                tour = next_round
-            else:
-                print("No next round → server finished.")
-                break
-
-    except Exception as e:
-        print("Client error:", e)
-
-    finally:
-        #sock.close()
-        #print("Connection closed.")
-        try:
-            sock.send(b"close")
-            sock.recv(1024)
-        except Exception:
-            pass
-        sock.close()
-        print("Connection closed.")
-
-
-#myparser = Parser()
-#client_id = "0"
-#path_dir = "."
-
-#run_client()
 
 if __name__ == "__main__":
     run_client()

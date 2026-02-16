@@ -349,29 +349,25 @@ def run_server():
     store.connect(("127.0.0.1", 8000))
     print("Connected to STORE.")
 
-    # Popper-style global feedback
     outcome_glob = (None, None)
 
-    # Bookkeeping (equivalent to Stats)
-    best_avg_score = float("-inf")
+    best_score = float("-inf")
     best_rules_str = None
     best_round = None
 
     round_id = 0
     start_time = time.time()
-    TIMEOUT = 600
 
     try:
         while True:
             elapsed = time.time() - start_time
-            print("\n" + "=" * 50)
+            print("\n" + "=" * 60)
             print(f"[Popper] Program #{round_id}")
-            print(f"[Time] Elapsed: {elapsed:.2f}s")
-            print(f"[State] clause_size={st.current_clause_size}")
-            print("=" * 50)
+            print(f"[Time] {elapsed:.2f}s elapsed")
+            print("=" * 60)
 
             # --------------------------------------------------
-            # 1) ONE Popper step (federated)
+            # 1) ONE POPPER STEP (Generate candidate)
             # --------------------------------------------------
             (
                 rules_arr,
@@ -395,37 +391,20 @@ def run_server():
                 st.current_clause_size,
             )
 
-            # Update server state
             st.current_min_clause = min_clause
             st.current_before = before
             st.current_clause_size = clause_size
             st.solver = solver
 
             # --------------------------------------------------
-            # 2) Stop if Popper search exhausted
+            # 2) STOP if search exhausted (Popper semantics)
             # --------------------------------------------------
             if exhausted:
-                elapsed = time.time() - start_time
                 print("\n🚫 SEARCH EXHAUSTED")
-                print(f"Total programs tested: {round_id}")
-                print(f"Total time: {elapsed:.2f}s")
-
-                if best_rules_str:
-                    print(
-                        f"Best hypothesis found at program #{best_round} "
-                        f"(avg_score={best_avg_score:.4f})"
-                    )
-                    for r in best_rules_str:
-                        print("  ", r)
-                else:
-                    print("No valid hypothesis found.")
-                store.send(f"tell(prgmlen({round_id},final))".encode())
-                store.recv(1024)
-
                 break
 
             # --------------------------------------------------
-            # 3) Publish round + hypothesis to STORE
+            # 3) Publish hypothesis
             # --------------------------------------------------
             reset_store(store)
 
@@ -435,12 +414,9 @@ def run_server():
             raw_rules = rules_arr[0].tolist() if len(rules_arr[0]) > 0 else []
             current_rules_str = [normalize_rule_for_store(r) for r in raw_rules]
 
-            print("[Published hypothesis]")
-            if current_rules_str:
-                for r in current_rules_str:
-                    print("  ", r)
-            else:
-                print("  (empty hypothesis)")
+            print("[Hypothesis]")
+            for r in current_rules_str:
+                print(" ", r)
 
             tell_hypothesis(store, current_rules_str, round_id)
 
@@ -448,92 +424,50 @@ def run_server():
                 st.current_hypothesis = new_hypothesis
 
             # --------------------------------------------------
-            # 4) Collect client ε-pairs (+ scores)
+            # 4) CENTRALIZED TEST (reference semantics)
+            # --------------------------------------------------
+            Eplus_c, Eminus_c, score_c = central_test_hypothesis(
+                current_rules_str, st.tester_full
+            )
+
+            print(f"[CENTRAL] Outcome=({Eplus_c},{Eminus_c}) score={score_c}")
+
+            # --------------------------------------------------
+            # 5) CLIENT TESTS
             # --------------------------------------------------
             lepairs = get_epsilon_pairs(store, nb_client, round_id)
             parsed = [parse_epair_with_score(e) for e in lepairs]
-
-            print("[Client feedback]")
-            for p in parsed:
-                print("  ", p)
 
             eps_pairs = [(ep, en) for (ep, en, _) in parsed]
             Eplus, Eminus = aggregate_outcomes(eps_pairs)
             outcome_glob = (Eplus, Eminus)
 
-            print(f"[Aggregated outcome] {outcome_glob}")
-
-            # --------------------------------------------------
-            # 5) Score bookkeeping (best hypothesis)
-            # --------------------------------------------------
             scores = [s for (_, _, s) in parsed]
-            avg_score = sum(scores) / len(scores) if scores else 0.0
-            print(f"[Score] Avg score: {avg_score:.4f}")
+            fed_score = sum(scores)  # IMPORTANT: additive, not average
 
-            if raw_rules and avg_score > best_avg_score:
-                best_avg_score = avg_score
+            print(f"[FEDERATED] Outcome={outcome_glob} score={fed_score}")
+
+            # --------------------------------------------------
+            # 6) VALIDATION CHECK (requested experiment)
+            # --------------------------------------------------
+            if (Eplus_c, Eminus_c) != outcome_glob or abs(score_c - fed_score) > 1e-6:
+                print("⚠️  MISMATCH central vs federated")
+            else:
+                print("✅ evaluations match")
+
+            # --------------------------------------------------
+            # 7) Track best hypothesis (Popper-like)
+            # --------------------------------------------------
+            if raw_rules and fed_score > best_score:
+                best_score = fed_score
                 best_rules_str = list(current_rules_str)
                 best_round = round_id
-                print(
-                    f" New BEST hypothesis at program #{best_round} "
-                    f"(avg_score={best_avg_score:.4f})"
-                )
 
             # --------------------------------------------------
-            # 6) Stop if perfect solution (ALL/NONE)
+            # 8) STOP if perfect solution
             # --------------------------------------------------
             if outcome_glob == ("all", "none"):
-                elapsed = time.time() - start_time
-                print("\nGLOBAL SOLUTION FOUND")
-                print(f"Program #{round_id}")
-                print(f"Total time: {elapsed:.2f}s")
-                for r in current_rules_str:
-                    print("  ", r)
-
-                # republier proprement ce round comme FINAL
-                reset_store(store)
-
-                store.send(f"tell(round({round_id}))".encode())
-                store.recv(1024)
-
-                # publier l'hypothèse (ça écrit prgmlen(round_id, N) + prgm(...))
-                tell_hypothesis(store, current_rules_str, round_id)
-
-                # IMPORTANT: retirer prgmlen(round_id, N) pour éviter conflit de matching
-                store.send(f"get(prgmlen({round_id}))".encode())
-                store.recv(1024)
-
-                # puis marquer final
-                store.send(f"tell(prgmlen({round_id},final))".encode())
-                store.recv(1024)
-
-                break
-
-
-            # --------------------------------------------------
-            # 7) Global timeout (Popper-style safety)
-            # --------------------------------------------------
-            if time.time() - start_time > TIMEOUT:
-                print(f"⏱️ TIMEOUT ({TIMEOUT}s) reached.")
-
-                if best_rules_str:
-                    print("📤 Sending FINAL hypothesis to clients")
-
-                    reset_store(store)
-
-                    store.send(f"tell(round({round_id}))".encode())
-                    store.recv(1024)
-
-                    tell_hypothesis(store, best_rules_str, round_id)
-
-                    # retirer prgmlen(round_id, N)
-                    store.send(f"get(prgmlen({round_id}))".encode())
-                    store.recv(1024)
-
-                    # marquer final
-                    store.send(f"tell(prgmlen({round_id},final))".encode())
-                    store.recv(1024)
-
+                print("\n🎯 GLOBAL SOLUTION FOUND")
                 break
 
             round_id += 1
@@ -542,30 +476,24 @@ def run_server():
         print("Server error:", e)
 
     finally:
-        try:
-            print("Sending close to STORE")
-            store.send(b"close")
-            store.recv(1024)
-        except Exception:
-            pass
-
-        store.close()
-
         elapsed = time.time() - start_time
+
         print("\n========== FINAL SUMMARY ==========")
-        print(f"Total programs tested: {round_id}")
+        print(f"Programs explored: {round_id}")
         print(f"Total execution time: {elapsed:.2f}s")
 
         if best_rules_str:
-            print(
-                f"Best hypothesis found at program #{best_round} "
-                f"(avg_score={best_avg_score:.4f})"
-            )
+            print(f"Best hypothesis (round {best_round}, score={best_score}):")
             for r in best_rules_str:
-                print("  ", r)
-        else:
-            print("No valid hypothesis found.")
+                print(" ", r)
 
+        try:
+            store.send(b"close")
+            store.recv(1024)
+        except:
+            pass
+
+        store.close()
         print("Connection to STORE closed.")
 
 

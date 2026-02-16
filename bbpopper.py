@@ -31,10 +31,12 @@ def handle_client(client_socket, addr):
             #print("Launching parser for request")
             #print(request)
             #ast = myparser.parse(request)
-            request = client_socket.recv(1024).decode("utf-8").strip()
+            request = client_socket.recv(1024)
             if not request:
-                continue
+                break
+                #continue
 
+            request = request.decode("utf-8").strip()
             print("\n--- RAW REQUEST --------------------------------")
             print(request)
             print("------------------------------------------------")

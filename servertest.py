@@ -7,10 +7,21 @@ from popper.core import Clause
 from aggstrategy import aggregate_outcomes, aggregate_popper
 import time
 import numpy as np
-from popper.structural_tester import StructuralTester
+from popper.tester import Tester
 
 from popper.loop import decide_outcome, calc_score
 import traceback
+from popper.util import load_kbpath
+NB_CLIENTS = 3
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains"
+
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer"
+
+
+#from popper.structural_tester import StructuralTester
+
 from popper.util import load_kbpath
 # ================================
 #    GLOBAL STATE
@@ -52,14 +63,14 @@ def cli_prompt():
 
 def initialisation():
     print("Please introduce ...")
-    nb_client = int(input("- number of Popper clients: "))
-    path_dir = input("- path to BK/Examples (folder): ")
+    nb_client = NB_CLIENTS 
+    path_dir = DATASET_PATH
     return nb_client,path_dir
 
 # ================================
 #   POPPER INITIALISE
 # ================================
-def popper_initialisation_old(path_dir):
+def popper_initialisation(path_dir):
     #global settings, stats, solver, grounder, constrainer, tester
     #global current_hypothesis, current_before, current_min_clause, current_clause_size
      
@@ -70,71 +81,33 @@ def popper_initialisation_old(path_dir):
     # Here we assume bias.pl is inside that folder
     #bias_file = f"{path_dir}/bias.pl"
     
-    kbpath = f"{path_dir}"
-    _, _, bias_file = load_kbpath(kbpath)
+    #kbpath = f"{path_dir}"
+    _, _, bias_file = load_kbpath(path_dir)
     settings = Settings(bias_file, None, None)
     stats = Stats(log_best_programs=settings.info)
     solver = ClingoSolver(settings)
     grounder = ClingoGrounder()
     constrainer = Constrain()
-    tester = StructuralTester()
+    tester = Tester(settings)
 
     current_hypothesis = None
     current_before = None
     current_min_clause = 0
     current_clause_size = 0
     path_dir=path_dir
-    #state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_before,current_min_clause,current_clause_size,current_hypothesis)
-    state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_min_clause, current_before, current_clause_size, current_hypothesis)
-    return state 
-
-
-def popper_initialisation(path_dir):
-    print("Initialising Distributed FILP...")
-
-    # ========== FEDERATED / STRUCTURAL PART ==========
-    kbpath = f"{path_dir}"
-    _, _, bias_file = load_kbpath(kbpath)
-
-    settings = Settings(bias_file, None, None)
-    stats = Stats(log_best_programs=settings.info)
-    solver = ClingoSolver(settings)
-    grounder = ClingoGrounder()
-    constrainer = Constrain()
-    tester_structural = StructuralTester()
 
     # ========== CENTRALIZED TESTING PART ==========
     
-    bk_file, ex_file, bias_file = load_kbpath(kbpath)
+    bk_file, ex_file, bias_file = load_kbpath(path_dir)
     settings_full = Settings(bias_file, ex_file, bk_file)
     tester_full = Tester(settings_full)
 
-    state = FILPServerState(
-        settings=settings,
-        solver=solver,
-        grounder=grounder,
-        constrainer=constrainer,
-        tester=tester_structural,
-        stats=stats,
-        min_clause=0,
-        before=None,
-        clause_size=0,
-        hypothesis=None
-    )
+    #state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_before,current_min_clause,current_clause_size,current_hypothesis)
+    state = FILPServerState(settings, solver, grounder, constrainer, tester, stats, current_min_clause, current_before, current_clause_size, current_hypothesis)
 
-    # AJOUT IMPORTANT
     state.tester_full = tester_full
+    return state 
 
-    return state
-
-
-def convert_to_blpy(rule):
-    r = rule.replace(" ", "")
-    r = r.replace(":-", ",")
-    r = r.replace("),", ");")
-    if not r.endswith("."):
-        r += "."
-    return r
 # ================================
 #   SEND RULES TO CLIENT
 # ================================
@@ -439,6 +412,7 @@ def run_server():
     central_round = None
     try:
         round_id = 0
+        start_time = time.time()
 
         while True:
 
@@ -488,17 +462,6 @@ def run_server():
             st.current_clause_size = current_clause_size
             st.solver = solver
 
-                # Update current hypothesis if non-empty
-                #raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
-                #rules_str = [normalize_rule_for_store(r) for r in raw_rules]
-
-                #if raw_rules:
-                    #st.current_hypothesis = new_rules
-
-                #print("Generated hypothesis:", rules_str)
-
-                # Publish hypothesis to store
-                #tell_hypothesis(store, rules_str, round_id)
 
             raw_rules = rules_arr[0].tolist() if (rules_arr and len(rules_arr[0]) > 0) else []
             current_rules_str = [normalize_rule_for_store(r) for r in raw_rules]
@@ -549,8 +512,24 @@ def run_server():
 
             # Average score
             scores = [s for (_, _, s) in parsed]
-            avg_score = sum(scores) / len(scores) if scores else 0.0
+            #avg_score = sum(scores) / len(scores) if scores else 0.0
+            avg_score = sum(scores)
             print(f"AVG score this round: {avg_score:.4f}")
+
+            # ==========================================================
+            # VALIDATION CHECK (Centralized vs Federated)
+            # This is the experimental verification requested in Algorithm 4
+            # ==========================================================
+
+            fed_outcome = outcome_glob
+            fed_score = avg_score
+
+            if (Eplus_c, Eminus_c) != fed_outcome or abs(score_c - fed_score) > 1e-6:
+                print("MISMATCH Central vs Federated evaluation")
+                print(f"   CENTRAL  : outcome=({Eplus_c},{Eminus_c}) score={score_c:.4f}")
+                print(f"   FEDERATED: outcome={fed_outcome} score={fed_score:.4f}")
+            else:
+                print(" Central and Federated evaluations are equivalent this round")
 
             if round_id != 0 and current_rules_str and avg_score > best_avg_score:
                 best_avg_score = avg_score
@@ -575,6 +554,8 @@ def run_server():
             # (A) Perfect global solution
             if outcome_glob == ("all", "none"):
                 print("Global solution found (ALL/NONE). Stopping.")
+                elapsed = time.time() - start_time
+                print(f"⏱️  Time to convergence: {elapsed:.2f} seconds")
                 store.send(b"close")
                 store.recv(1024)
                 break
