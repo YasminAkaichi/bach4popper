@@ -19,9 +19,10 @@
 %%     Called: 1539 times   Total: 0.05     Mean: 0.000     Max: 0.001
 %% Total operation time: 17.96s
 %% Total execution time: 18.08s
+
 max_clauses(4).
 max_vars(5).
-max_body(4).
+max_body(7).
 
 head_pred(next_score,3).
 body_pred(wins,2).

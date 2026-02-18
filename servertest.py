@@ -412,8 +412,7 @@ def run_server():
     central_round = None
     try:
         round_id = 0
-        start_time = time.time()
-
+        start_time = time.process_time()
         while True:
 
 
@@ -566,6 +565,8 @@ def run_server():
                 print("Search exhausted (max_literals reached). Returning best hypothesis.")
                 if best_rules_str:
                     print(f"Best was round {best_round} with avg_score={best_avg_score:.4f} and best hypothesis {best_rules_str}")
+                    elapsed = time.time() - start_time
+                    print(f"Time to termination (search exhausted): {elapsed:.2f} seconds")
                     #print("BEST hypothesis:", best_rules_str)
                 else:
                     print("No best hypothesis recorded (all rounds empty or scores missing).")

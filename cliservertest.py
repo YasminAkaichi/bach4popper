@@ -10,8 +10,8 @@ from popper.loop import build_rules, ground_rules
 from popper.generate import generate_program
 
 NB_CLIENTS = 3
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
 #DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains"
 
 # ================================
@@ -302,10 +302,7 @@ def run_server():
             st.solver.update_number_of_literals(size)
 
             while True:
-
-                # -----------------------------
                 # GENERATE (identique Popper)
-                # -----------------------------
                 with st.stats.duration('generate'):
                     model = st.solver.get_model()
                     if not model:
@@ -313,9 +310,7 @@ def run_server():
 
                     (program, before, min_clause) = generate_program(model)
 
-                # -----------------------------
                 # TEST (remplacé par fédéré)
-                # -----------------------------
                 with st.stats.duration('test'):
                     outcome, score, rules_str = federated_test(
                         program, store, nb_client, round_id
@@ -327,9 +322,7 @@ def run_server():
 
                 print(f"[Program #{round_id}] outcome={outcome}, score={score}")
 
-                # -----------------------------
                 # UPDATE BEST (identique Popper)
-                # -----------------------------
                 if best_score is None or score > best_score:
                     best_score = score
 
@@ -343,18 +336,14 @@ def run_server():
 
                         return
 
-                # -----------------------------
                 # BUILD CONSTRAINTS (identique)
-                # -----------------------------
                 with st.stats.duration('build'):
                     rules = build_rules(
                         st.settings, st.stats, st.constrainer,
                         st.tester, program, before, min_clause, outcome
                     )
 
-                # -----------------------------
                 # GROUND (identique)
-                # -----------------------------
                 with st.stats.duration('ground'):
                     rules = ground_rules(
                         st.stats, st.grounder,

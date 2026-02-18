@@ -12,7 +12,8 @@ from popper.loop import decide_outcome, calc_score
 from popper.util import Settings, Stats
 from popper.util import load_kbpath
 import re
-
+import json 
+import os
 import traceback
 # ======================================================
 #  Helper: parse Popper rule string
@@ -25,8 +26,7 @@ import traceback
 #settings = Settings(bias_file, ex_file, bk_file)
 #tester = Tester(settings)
 #stats  = Stats(log_best_programs=settings.info)
-DATASET_PATH = "datasets/part2"
-CLIENT_ID = "2"
+
 from parser import Parser
 
 def parse_rule(rule_str):
@@ -73,31 +73,49 @@ def cli_prompt():
                |  |        
 """)
 
+def count_pos_neg_in_file(ex_file: str):
+    pos = neg = 0
+    with open(ex_file, "r") as f:
+        for line in f:
+            s = line.strip()
+            if s.startswith("pos("):
+                pos += 1
+            elif s.startswith("neg("):
+                neg += 1
+    return pos, neg
 
-def initialisationold():
-    global client_id, path_dir
+CLIENT_ID = 2 
+
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part2"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part2"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part2"
+
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
+
+
+def initialisation():
+    #global client_id, path_dir
     print("Please introduce ... ")
-    client_id = input("- the number to identify the client: ")
-    path_dir = input("- the path to example files (folder): ")
+    #client_id = input("- the number to identify the client: ")
+    #path_dir = input("- the path to example files (folder): ")
+    client_id = int(CLIENT_ID)
+    path_dir = DATASET_PATH
+    
     #LOAD PROLOG BACKGROUND + EXAMPLES
     bk, ex, bias = load_kbpath(path_dir)
     settings = Settings(bias, ex, bk)
     tester = Tester(settings)
     stats = Stats(log_best_programs=settings.info)
     settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
+    # 🔎 DEBUG: compare FILE vs TESTER
+    # 🔎 DEBUG: compare FILE vs TESTER
+    file_pos, file_neg = count_pos_neg_in_file(ex)
+    print(f"[CLIENT {client_id}] FILE counts   pos={file_pos} neg={file_neg}")
+    print(f"[CLIENT {client_id}] TESTER counts pos={len(tester.pos)} neg={len(tester.neg)}")
+    return client_id, path_dir, settings, tester, stats
 
-def initialisation():
-    global client_id, path_dir
-    client_id = CLIENT_ID
-    path_dir = DATASET_PATH
 
-    print(f"[CLIENT {client_id}] Using dataset {path_dir}")
 
-    bk, ex, bias = load_kbpath(path_dir)
-    settings = Settings(bias, ex, bk)
-    tester = Tester(settings)
-    settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
-    print(f"[CLIENT {client_id}] #POS={len(tester.pos)} #NEG={len(tester.neg)}")
 
 def transform_rule_to_tester_format(rule_str):
     print(f"🔍 Transforming rule: {rule_str}")
@@ -323,6 +341,28 @@ def transform_rule_to_tester_format(rule_str):
 
     return (head, body)
 
+def format_conf_matrix(conf_matrix):
+    tp, fn, tn, fp = conf_matrix
+
+    precision = 'n/a'
+    if (tp + fp) > 0:
+        precision = f'{tp / (tp + fp):0.2f}'
+
+    recall = 'n/a'
+    if (tp + fn) > 0:
+        recall = f'{tp / (tp + fn):0.2f}'
+
+    accuracy = 'n/a'
+    total = tp + tn + fp + fn
+    if total > 0:
+        accuracy = f'{(tp + tn) / total:0.2f}'
+
+    return (
+        f'% Precision:{precision}, Recall:{recall}, Accuracy:{accuracy}, '
+        f'TP:{tp}, FN:{fn}, TN:{tn}, FP:{fp}\n'
+    )
+
+
 def popper_test_hypothesis_final(hypothesis_strings, tester):
     try:
         print("\n Starting local test of hypothesis...")
@@ -346,7 +386,7 @@ def popper_test_hypothesis_final(hypothesis_strings, tester):
         cm = tester.test(rules)
 
         print("Confusion matrix:", cm)
-
+        print(format_conf_matrix(cm))
         Eplus, Eminus = decide_outcome(cm)
         print(f"Outcome = ({Eplus}, {Eminus})")
         score = calc_score(cm)
@@ -357,6 +397,7 @@ def popper_test_hypothesis_final(hypothesis_strings, tester):
         print("Error while testing hypothesis:")
         traceback.print_exc()
         return ("x", "x")
+
 
 
 def popper_test_local(rule_strings, tester):
@@ -381,7 +422,8 @@ def popper_test_local(rule_strings, tester):
 
 
 def send_epair(sock, client_id, tour, Eplus, Eminus, score):
-    msg = f"tell(epair({tour},{client_id},{Eplus},{Eminus},{score}))"
+    score_int = int(float(score)) 
+    msg = f"tell(epair({tour},{client_id},{Eplus},{Eminus},{score_int}))"
     sock.send(msg.encode())
     sock.recv(1024)  # confirmation du store
 
@@ -393,16 +435,64 @@ def check_finish():
     
 import re
 
-
 def popper_read_hypothesis(sock, tour):
+    # 1) non bloquant : est-ce final ?
+    sock.send(f"in(prgmlen({tour},final))".encode())
+    is_final = sock.recv(1024).decode().strip().lower() == "true"
+
+    if is_final:
+        # final round => lire clauses jusqu'à échec
+        clauses = []
+        i = 0
+        while True:
+            sock.send(f"ask(prgm({tour},{i}))".encode())
+            resp = sock.recv(4096).decode()
+            if "failed" in resp or "wait" in resp:
+                break
+            m2 = re.search(r"\{\s*(.*?)\s*\}", resp)
+            if not m2:
+                break
+            rule = m2.group(1).strip()
+            if not rule.endswith("."):
+                rule += "."
+            clauses.append(rule)
+            i += 1
+        return clauses, "final"
+
+    # 2) sinon, round normal (bloquant)
+    sock.send(f"ask(prgmlen({tour}))".encode())
+    resp = sock.recv(1024).decode()
+
+    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(\w+|-?\d+)\s*\)", resp)
+    if not m:
+        return [], 0
+
+    nb_cl = int(m.group(1))
+    clauses = []
+    for i in range(nb_cl):
+        sock.send(f"ask(prgm({tour},{i}))".encode())
+        resp = sock.recv(4096).decode()
+        m2 = re.search(r"\{\s*(.*?)\s*\}", resp)
+        if m2:
+            rule = m2.group(1).strip()
+            if not rule.endswith("."):
+                rule += "."
+            clauses.append(rule)
+    return clauses, nb_cl
+
+
+def popper_read_hypothesis1513(sock, tour):
     # get prgmlen(tour, N)
     query = f" ask(prgmlen({tour})) "
     sock.send(query.encode())
     resp = sock.recv(1024).decode()
+
+    #si tour = 0 
+
     print("Raw prgmlen:", resp)
 
     # parse N
-    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(\d+)\s*\)", resp)
+    m = re.search(r"prgmlen\(\s*"+str(tour)+r"\s*,\s*(-?\d+)\s*\)", resp)
     if not m:
         print("Could not extract prgmlen — maybe the STORE replied differently?")
         return []
@@ -431,57 +521,150 @@ def popper_read_hypothesis(sock, tour):
 
         clauses.append(rule)
 
-    return clauses
+    return clauses, nb_cl
 
-
-
+def is_final_round(sock):
+    sock.send(f"ask(final({0}))".encode())
+    resp = sock.recv(1024).decode()
+    return "final" in resp
 
 def run_client():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.connect(("127.0.0.1", 8000))
-    finish = False
-    hypothesis = []
 
     try:
         cli_prompt()
-        initialisation()
+        client_id, path_dir, settings, tester, stats = initialisation()
 
-        # Load ILP data
-        bk_file, ex_file, bias_file = load_kbpath(path_dir)
-        settings = Settings(bias_file, ex_file, bk_file)
-        tester = Tester(settings)
-        settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
         tour = 0
-        stats  = Stats(log_best_programs=settings.info)
+        final_round = False
+
         while True:
-            msg = f"ask(round({tour}))"
-            sock.send(msg.encode())
-            sock.recv(1024)
-            # 1) RECEIVE RULES
-            hypothesis = popper_read_hypothesis(sock,tour)
+            hypothesis, nb_raw = popper_read_hypothesis(sock, tour)
+
+            # 🔴 FINAL
+            if nb_raw == "final":
+                print("\n🎉 FINAL round detected")
+                print("Final hypothesis:")
+                for h in hypothesis:
+                    print("  ", h)
+                break
+
+            # 🟢 NORMAL
+            nb_cl = nb_raw
+          
+
             print("\nReceived hypothesis:")
             for h in hypothesis:
                 print("   ", h)
 
-            # 2) LOCAL TESTING
-            Eplus, Eminus, score = popper_test_hypothesis_final(hypothesis, tester)
 
-            print(f"Local outcome = ({Eplus}, {Eminus})")
-         
-            # 3) SEND OUTCOME TO SERVER
-            send_epair(sock, client_id,tour, Eplus, Eminus, score)
+            # --------------------------------------------------
+            # 5) Normal round → local test
+            # --------------------------------------------------
+            Eplus, Eminus, score = popper_test_hypothesis_final(
+                hypothesis, tester
+            )
+
+            print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
+
+            # --------------------------------------------------
+            # 6) Send feedback
+            # --------------------------------------------------
+            send_epair(sock, client_id, tour, Eplus, Eminus, score)
+
             tour += 1
-            #finish = check_finish()
 
     except Exception as e:
-        print("Error:", e)
+        print("Client error:", e)
 
     finally:
+        #sock.close()
+        sock.send(b"close")
+        sock.recv(1024)
+        print("Connection closed.")
+
+
+def run_clientxx():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect(("127.0.0.1", 8000))
+
+    try:
+        cli_prompt()
+        client_id, path_dir, settings, tester, stats = initialisation()
+
+        tour = 0
+        final_round = False
+
+        while True:
+            # --------------------------------------------------
+            # 1) Ask for current round info
+            # --------------------------------------------------
+            #sock.send(f"ask(round({tour}))".encode())
+            #resp = sock.recv(1024).decode()
+
+            
+            #print("Raw prgmlen:", resp)
+
+            # 3) CAS FINAL
+         
+            hypothesis, nb_cl = popper_read_hypothesis(sock, tour)
+            
+            if nb_cl == "final":
+                print("\n🎉 FINAL round detected")
+                print("Final hypothesis:")
+                for h in hypothesis:
+                    print("   ", h)
+                break
+
+
+        
+            # --------------------------------------------------
+            # 5) Normal round → local test
+            # --------------------------------------------------
+            Eplus, Eminus, score = popper_test_hypothesis_final(
+                hypothesis, tester
+            )
+
+            print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
+
+            # --------------------------------------------------
+            # 6) Send feedback
+            # --------------------------------------------------
+            send_epair(sock, client_id, tour, Eplus, Eminus, score)
+
+            # attendre que le prochain round soit publié
+            next_round = tour + 1
+
+            sock.send(f"ask(round({next_round}))".encode())
+            resp = sock.recv(1024).decode()
+
+            if "present" in resp:
+                tour = next_round
+            else:
+                print("No next round → server finished.")
+                break
+
+    except Exception as e:
+        print("Client error:", e)
+
+    finally:
+        #sock.close()
+        #print("Connection closed.")
+        try:
+            sock.send(b"close")
+            sock.recv(1024)
+        except Exception:
+            pass
         sock.close()
         print("Connection closed.")
 
 
-myparser = Parser()
-client_id = "0"
-path_dir = "."
-run_client()
+#myparser = Parser()
+#client_id = "0"
+#path_dir = "."
+
+#run_client()
+
+if __name__ == "__main__":
+    run_client()
