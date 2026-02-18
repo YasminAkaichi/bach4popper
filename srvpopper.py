@@ -10,9 +10,10 @@ from popper.loop import build_rules, ground_rules
 from popper.generate import generate_program
 
 NB_CLIENTS = 3
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/iggp-rps"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/zendo1"
+
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/trains"
 
 # ================================
 #    GLOBAL STATE
@@ -71,7 +72,6 @@ def popper_initialisation(path_dir):
     
     #kbpath = f"{path_dir}"
     _, _, bias_file = load_kbpath(path_dir)
-    ##bk, , bias_file = load_kbpath(path_dir)
     settings = Settings(bias_file, None, None)
     stats = Stats(log_best_programs=settings.info)
     solver = ClingoSolver(settings)
@@ -349,7 +349,7 @@ def run_server():
 
                 # ---- STOP CONDITION (true Popper semantics)
                 if outcome == ("all", "none"):
-                    print("\n✅ Solution found (ALL, NONE)")
+                    print("\n Solution found (ALL, NONE)")
                     found_solution = True
                     break
 

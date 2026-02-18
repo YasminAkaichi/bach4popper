@@ -15,19 +15,14 @@ import re
 import json 
 import os
 import traceback
-# ======================================================
-#  Helper: parse Popper rule string
-# ======================================================
 
-#kbpath = "part1"
-#bk_file, ex_file, bias_file = load_kbpath(kbpath)
+CLIENT_ID = 3
 
-# 🔹 Initialize ILP settings
-#settings = Settings(bias_file, ex_file, bk_file)
-#tester = Tester(settings)
-#stats  = Stats(log_best_programs=settings.info)
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/iggp-rps_part3"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/zendo1_part3"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/trains_part3"
 
-from parser import Parser
+
 
 def parse_rule(rule_str):
     """Convert 'h(A):-b1(B),b2(C).' into Popper structure."""
@@ -84,13 +79,7 @@ def count_pos_neg_in_file(ex_file: str):
                 neg += 1
     return pos, neg
 
-CLIENT_ID = 3
 
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part3"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part3"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part3"
-
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
 
 
 def initialisation():

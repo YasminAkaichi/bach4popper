@@ -5,57 +5,30 @@
 
 import socket
 from popper.tester import Tester
-from popper.core import Clause, Literal
+from popper.core import Literal
 from popper.loop import decide_outcome, calc_score
 from popper.util import Settings, Stats
 from popper.util import load_kbpath
 import re
 import traceback
-# ======================================================
-#  Helper: parse Popper rule string
-# ======================================================
 
-#kbpath = "part1"
-#bk_file, ex_file, bias_file = load_kbpath(kbpath)
+CLIENT_ID = 1 
 
-# 🔹 Initialize ILP settings
-#settings = Settings(bias_file, ex_file, bk_file)
-#tester = Tester(settings)
-#stats  = Stats(log_best_programs=settings.info)
-
-from parser import Parser
-
-def parse_rule(rule_str):
-    """Convert 'h(A):-b1(B),b2(C).' into Popper structure."""
-    rule_str = rule_str.strip()
-    if rule_str.endswith('.'):
-        rule_str = rule_str[:-1]
-
-    if ":-" in rule_str:
-        head, body = rule_str.split(":-")
-        body_lits = re.findall(r'\w+\(.*?\)', body)
-        head = Literal.from_string(head.strip())
-        body = tuple(Literal.from_string(b.strip()) for b in body_lits)
-    else:
-        head = Literal.from_string(rule_str)
-        body = tuple()
-
-    return (head, body)
-
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/iggp-rps_part1"
+DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/zendo1_part1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/trains_part1"
+#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/datasets/alzheimer_p1"
 # ======================================================
 #  BLPy parsing helpers
 # ======================================================
 
 def get_nb_clause_from_prgmlen_si(ast):
-    """Extract integer n from SI-term prgmlen(n)."""
     try:
-        term = ast.arguments[0]
-        if hasattr(term, "value"):
-            return int(term.value)      # SI_ATOMIC case
-        return int(str(term))
+        arg_prgmlen_si = ast.arguments
+        nb_cl = arg_prgmlen_si[0]
+        return nb_cl
     except Exception as e:
-        print(f"[ERROR extracting prgmlen] {e}")
-        return 0
+        print(f"Error: {e}")
 
 # ======================================================
 #  CLIENT LOGIC
@@ -80,20 +53,12 @@ def count_pos_neg_in_file(ex_file: str):
                 neg += 1
     return pos, neg
 
-CLIENT_ID = 1 
 
-DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/iggp-rps_part1"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/zendo1_part1"
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/trains_part1"
-
-#DATASET_PATH = "/Users/yasmineakaichi/Downloads/Bach-Popper-dist-v1/alzheimer_p1"
 
 
 def initialisation():
     #global client_id, path_dir
     print("Please introduce ... ")
-    #client_id = input("- the number to identify the client: ")
-    #path_dir = input("- the path to example files (folder): ")
     client_id = int(CLIENT_ID)
     path_dir = DATASET_PATH
     
@@ -110,216 +75,6 @@ def initialisation():
     return client_id, path_dir, settings, tester, stats
 
 
-
-
-def transform_rule_to_tester_format(rule_str):
-    print(f"🔍 Transforming rule: {rule_str}")
-
-    try:
-        # Split head and body correctly
-        head_body = rule_str.split(":-")
-        if len(head_body) != 2:
-            raise ValueError(f"Invalid rule format: {rule_str}")
-
-        head_str = head_body[0].strip()
-        body_str = head_body[1].strip()
-
-        # *Fix: Properly extract body literals using regex**
-        body_literals = re.findall(r'\w+\(.*?\)', body_str)
-
-        print(f"Parsed head: {head_str}")
-        print(f"Parsed body literals: {body_literals}")
-
-        # Convert to Literal objects (assuming `Literal.from_string` exists)
-        head = Literal.from_string(head_str)
-        body = tuple(Literal.from_string(lit) for lit in body_literals)
-
-        formatted_rule = (head, body)
-        print(f"Formatted rule: {formatted_rule}")
-
-        return formatted_rule
-    except Exception as e:
-        print(f"Error transforming rule: {rule_str} → {e}")
-        return None  # Return None to indicate failure
-
-
-
-def transform_rule(rule_str):
-    """
-    Transforme une règle string reçue du STORE en 
-    structure Popper valide : (Literal, tuple(Literal)).
-    """
-
-    # nettoyer
-    rule_str = rule_str.strip()
-
-    # enlever le point final
-    if rule_str.endswith('.'):
-        rule_str = rule_str[:-1]
-
-    # séparer head :- body
-    if ":-" not in rule_str:
-        # fait rare: règle factuelle
-        head = Literal.from_string(rule_str.strip())
-        return (head, tuple())
-
-    head_str, body_str = rule_str.split(":-")
-    head_str = head_str.strip()
-    body_str = body_str.strip()
-
-    # EXTRACTION ROBUSTE des littéraux du body
-    #  ⚠ même regex que dans Flower ⚠
-    body_literals = re.findall(r'\w+\([^)]*\)', body_str)
-
-    # convertir head + body
-    try:
-        head = Literal.from_string(head_str)
-        body = tuple(Literal.from_string(lit) for lit in body_literals)
-        return (head, body)
-
-    except Exception as e:
-        print("❌ transform_rule ERROR:", e)
-        return None
-    
-def parse_rules(rule_str):
-    rule_str = rule_str.strip()
-    if rule_str.endswith('.'):
-        rule_str = rule_str[:-1]
-
-    head_str, body_str = rule_str.split(":-")
-
-    head = Literal.from_string(head_str.strip())
-
-    body_literals = re.findall(r'\w+\(.*?\)', body_str)
-    body = tuple(Literal.from_string(bl) for bl in body_literals)
-
-    # LA LIGNE LA PLUS IMPORTANTE :
-    return Clause(head, body)
-
-def parse_rule_popper(rule_str):
-    """
-    Transforme une règle sous forme string 'h(X):-b1(X),b2(Y).'
-    vers un tuple Popper : (Literal, (Literal, Literal, ...))
-    """
-    rule = rule_str.strip()
-
-    # remove trailing dot
-    if rule.endswith('.'):
-        rule = rule[:-1]
-
-    # split head/body
-    if ":-" in rule:
-        head_str, body_str = rule.split(":-")
-        body_literals = re.findall(r'\w+\(.*?\)', body_str)
-    else:
-        head_str = rule
-        body_literals = []
-
-    head = Literal.from_string(head_str.strip())
-    body = tuple(Literal.from_string(b.strip()) for b in body_literals)
-
-    return (head, body)
-
-
-def test_hypothesis(rule_strings, tester):
-    """
-    Teste une hypothèse complète (une liste de clauses Popper).
-    rule_strings = [
-        "f(A) :- has_load(B,D),has_load(C,D), ... .",
-        "f(A) :- has_load(D,C),triangle(B), ... .",
-        "f(A) :- has_load(B,D),has_car(A,B), ... ."
-    ]
-    """
-    try:
-        rules = []
-
-        for r in rule_strings:
-            r = r.strip()
-            if r.endswith('.'):
-                r = r[:-1]
-
-            if ":-" in r:
-                head_str, body_str = r.split(":-")
-            else:
-                head_str = r
-                body_str = ""
-
-            head = Literal.from_string(head_str.strip())
-
-            # parse body into literals
-            body_literals = []
-            if body_str.strip():
-                for lit in body_str.split(","):
-                    lit = lit.strip()
-                    if lit:
-                        body_literals.append(Literal.from_string(lit))
-
-            rules.append((head, tuple(body_literals)))
-
-        # Maintenant on teste TOUTES les clauses ensemble
-        cm = tester.test(rules)
-        Eplus, Eminus = decide_outcome(cm)
-
-        return (
-            str(Eplus).lower() if Eplus else "none",
-            str(Eminus).lower() if Eminus else "none"
-        )
-
-    except Exception as e:
-        print("Error while testing hypothesis:", e)
-        return ("x", "x")
-
-def popper_test_local(rule_strings, tester):
-    """
-    Compute (Eplus, Eminus) exactly as Popper.
-    Rule_strings = ["f(A) :- ... ."]
-    """
-    try:
-        rules = []
-        for r in rule_strings:
-            r = r.strip()
-            if r.endswith('.'):
-                r = r[:-1]
-
-            if ":-" in r:
-                head_str, body_str = r.split(":-")
-                body_literals = re.findall(r'\w+\([^)]*\)', body_str)
-            else:
-                head_str = r
-                body_literals = []
-
-            head = Literal.from_string(head_str.strip())
-            body = tuple(Literal.from_string(b.strip()) for b in body_literals)
-            rules.append((head, body))
-
-        cm = tester.test(rules)
-        Eplus, Eminus = decide_outcome(cm)
-
-        # NORMALISATION (clé du problème !)
-        def norm(x):
-            if hasattr(x, "name"):
-                return x.name.lower()
-            return str(x).lower()
-
-        return norm(Eplus), norm(Eminus)
-
-    except Exception as e:
-        print("Local test failed:", e)
-        return ("x", "x")
-
-
-
-
-def get_nb_clause_from_prgmlen_si(ast):
-    try:
-        arg_prgmlen_si = ast.arguments
-        nb_cl = arg_prgmlen_si[0]
-        return nb_cl
-    except Exception as e:
-        print(f"Error: {e}")
-
-
-import re
 
 def transform_rule_to_tester_format(rule_str):
     head_body = rule_str.split(":-")
@@ -394,40 +149,12 @@ def popper_test_hypothesis_final(hypothesis_strings, tester):
         return ("x", "x")
 
 
-def popper_test_local(rule_strings, tester):
-    if len(rule_strings) == 0:
-        return ("none", "none")
-
-    rules = [parse_rule(r) for r in rule_strings]
-    print(f"ruuuuuuuuuuuuuuuules:{rules}")
-    try:
-        cm = tester.test(rules)
-    except Exception as e:
-        print("Tester failure:", e)
-        return ("none", "none")
-    out = decide_outcome(cm)
-    print(f"outcome{out}")
-
-    Eplus = out[0].name.lower()
-    Eminus = out[1].name.lower()
-
-    return (Eplus, Eminus)
-
-
 
 def send_epair(sock, client_id, tour, Eplus, Eminus, score):
     score_int = int(float(score)) 
     msg = f"tell(epair({tour},{client_id},{Eplus},{Eminus},{score_int}))"
     sock.send(msg.encode())
     sock.recv(1024)  # confirmation du store
-
-
-def check_finish():
-    return input("Finish? (0=no, 1=yes): ") == "1"
-
-
-    
-import re
 
 
 def popper_read_hypothesis(sock, tour):
@@ -476,12 +203,6 @@ def popper_read_hypothesis(sock, tour):
     return clauses, nb_cl
 
 
-
-
-def is_final_round(sock):
-    sock.send(f"ask(final({0}))".encode())
-    resp = sock.recv(1024).decode()
-    return "final" in resp
 
 def run_client():
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
