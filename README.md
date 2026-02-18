@@ -15,7 +15,7 @@ Bach4Popper/
  ├── external/popper/      # Embedded Popper ILP engine
  ├── store/                # Shared blackboard (STORE process)
  ├── datasets/             # Example datasets (modifiable paths)
- ├── cliserver.py          # Central coordination server
+ ├── srvpopper.py          # Central coordination server
  ├── clipopper.py          # Distributed ILP client
  └── requirements.txt
 ```
@@ -79,7 +79,7 @@ This starts the coordination space where agents exchange symbolic information.
 
 Terminal 2:
 ```bash
-python cliserver.py
+python srvpopper.py
 ```
 
 The server:
@@ -96,17 +96,17 @@ Open three additional terminals:
 
 Terminal 3:
 ```bash
-python clipopper.py --id 1
+python clipopper1.py
 ```
 
 Terminal 4:
 ```bash
-python clipopper.py --id 2
+python clipopper2.py
 ```
 
 Terminal 5:
 ```bash
-python clipopper.py --id 3
+python clipopper3.py
 ```
 
 Each client runs a local Popper instance over its data partition and communicates outcomes to the STORE.
@@ -115,9 +115,9 @@ Each client runs a local Popper instance over its data partition and communicate
 
 Dataset paths can be modified directly inside:
 
-clipopper.py
+clipopper1.py, clipopper2.py, clipopper3.py
 
-cliserver.py
+srvpopper.py
 
 Example:
 
