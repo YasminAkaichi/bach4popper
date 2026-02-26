@@ -13,7 +13,7 @@ This repository embeds Popper v1.1.0 directly under external/popper, ensuring fu
 Bach4Popper/
  ├── bach4popper/          # Coordination and orchestration logic
  ├── external/popper/      # Embedded Popper ILP engine
- ├── store/                # Shared blackboard (STORE process)
+ ├── store.py              # Shared blackboard (STORE process)
  ├── datasets/             # Example datasets (modifiable paths)
  ├── bbpopper.py           # Central coordination Bach
  ├── srvpopper.py          # Coordination server (Hypotheses generation)
