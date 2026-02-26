@@ -15,16 +15,16 @@ Bach4Popper/
  ├── external/popper/      # Embedded Popper ILP engine
  ├── store/                # Shared blackboard (STORE process)
  ├── datasets/             # Example datasets (modifiable paths)
+ ├── bbpopper.py           # Central coordination server
  ├── srvpopper.py          # Central coordination server
- ├── clipopper.py          # Distributed ILP client
+ ├── clipopper*.py         # Distributed ILP client
+ ├── bbpopper.py           # Central coordination server
  └── requirements.txt
 ```
 
-## System Requirements
+## Recommended Execution: Docker (Reproducible Environment)
 
-The system relies on symbolic reasoning tools used by Popper.
-
-Please install:
+To guarantee platform-independent reproducibility, Bach4Popper is distributed with a Docker configuration that encapsulates:
 
 Python ≥ 3.10
 
@@ -32,84 +32,101 @@ SWI-Prolog
 
 Clingo (ASP solver)
 
+All Python dependencies
+
+The embedded Popper engine
+
+No manual installation of symbolic reasoning tools is required.
+
+## Running with Docker (Recommended)
+
+### 1. Clone the Repository
+git clone https://github.com/<your-username>/Bach4Popper.git
+cd Bach4Popper
+### 2. Build the Docker Image
+```bash
+docker build -t bach4popper .
+```
+
+This step installs all dependencies and prepares a fully configured execution environment.
+### 3. Launch the Container
+```bash
+docker run -it --name bach bach4popper
+```
+You are now inside the reproducible environment.
+
+### 4. Start the Coordination STORE
+```bash
+python3 bbpopper.py
+```
+This launches the shared tuple-space used for coordination.
+
+### 5. Open Additional Shells (Same Container)
+
+From another terminal:
+```bash
+docker exec -it bach bash
+```
+
+### 6. Start the Server
+```bash
+python3 srvpopper.py
+```
+The server: generates hypotheses, manages constraints andaggregates feedback.
+
+### 7. Launch Distributed Clients
+
+Open additional shells and run:
+```bash
+python3 clipopper1.py
+```
+```bash
+python3 clipopper2.py
+```
+```bash
+python3 clipopper3.py
+```
+
+Each client evaluates hypotheses locally and returns symbolic feedback.
+
+
+## Dataset Structure
+
+Datasets are partitioned to simulate distributed ownership:
+```bash
+datasets/
+ ├── zendo1/
+ ├── zendo1_part1/
+ ├── zendo1_part2/
+ └── zendo1_part3/
+```
+Each client accesses only its local partition.
+No raw data is shared during learning.
+
+## Optional: Running Without Docker (Manual Setup)
+
+This is not recommended, but possible.
+
+Requirements:
+```bash
+Python ≥ 3.10
+SWI-Prolog
+Clingo
+Numpy
+```
 Check installation:
 ```bash
 swipl --version
 clingo --version
 ```
-
-## Installation
-
-Clone the repository:
-```bash
-git clone https://github.com/<your-username>/Bach4Popper.git
-cd Bach4Popper
-```
-
-Create a virtual environment (recommended):
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-Install required Python packages:
+Install Python dependencies:
 ```bash
 pip install -r requirements.txt
-pip install parsimonious
+pip install ./external/popper
 ```
+Then follow the same execution steps as above.
 
-parsimonious is required for the coordination layer (grammar-based parsing inspired by BLP-style coordination).
 
-## Running Bach4Popper
-
-The system is composed of several coordinated processes that must be launched in separate terminals.
-
-You will need five terminals.
-
-### Step 1 — Launch the STORE (Shared Blackboard)
-
-Terminal 1:
-```bash
-python store/bb_popper.py
-```
-
-This starts the coordination space where agents exchange symbolic information.
-
-### Step 2 — Launch the Central Server (Coordinator)
-
-Terminal 2:
-```bash
-python srvpopper.py
-```
-
-The server:
-
-orchestrates rounds,
-
-aggregates hypotheses,
-
-controls termination.
-
-### Step 3 — Launch Distributed Clients
-
-Open three additional terminals:
-
-Terminal 3:
-```bash
-python clipopper1.py
-```
-
-Terminal 4:
-```bash
-python clipopper2.py
-```
-
-Terminal 5:
-```bash
-python clipopper3.py
-```
-
-Each client runs a local Popper instance over its data partition and communicates outcomes to the STORE.
 
 ## Dataset Configuration
 
