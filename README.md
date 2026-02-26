@@ -41,7 +41,7 @@ No manual installation of symbolic reasoning tools is required.
 ## Running with Docker (Recommended)
 
 ### 1. Clone the Repository
-git clone https://github.com/<your-username>/Bach4Popper.git
+git clone https://github.com/YasminAkaichi/bach4popper.git
 cd Bach4Popper
 ### 2. Build the Docker Image
 ```bash
@@ -78,12 +78,15 @@ The server: generates hypotheses, manages constraints andaggregates feedback.
 
 Open additional shells and run:
 ```bash
+docker exec -it bach bash
 python3 clipopper1.py
 ```
 ```bash
+docker exec -it bach bash
 python3 clipopper2.py
 ```
 ```bash
+docker exec -it bach bash
 python3 clipopper3.py
 ```
 
