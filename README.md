@@ -41,8 +41,10 @@ No manual installation of symbolic reasoning tools is required.
 ## Running with Docker (Recommended)
 
 ### 1. Clone the Repository
+```bash
 git clone https://github.com/YasminAkaichi/bach4popper.git
 cd Bach4Popper
+```
 ### 2. Build the Docker Image
 ```bash
 docker build -t bach4popper .
