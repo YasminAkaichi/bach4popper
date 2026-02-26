@@ -15,10 +15,10 @@ Bach4Popper/
  ├── external/popper/      # Embedded Popper ILP engine
  ├── store/                # Shared blackboard (STORE process)
  ├── datasets/             # Example datasets (modifiable paths)
- ├── bbpopper.py           # Central coordination server
- ├── srvpopper.py          # Central coordination server
- ├── clipopper*.py         # Distributed ILP client
- ├── bbpopper.py           # Central coordination server
+ ├── bbpopper.py           # Central coordination Bach
+ ├── srvpopper.py          # Coordination server (Hypotheses generation)
+ ├── clipopper*.py         # Distributed ILP clients
+ ├── interpreter.py        # Execution coordination logic)
  └── requirements.txt
 ```
 
