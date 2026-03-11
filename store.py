@@ -341,28 +341,28 @@ class STORE:
     def get(self, functor, si, pid):
         with self.lock:
 
-            # 🔴 1) Si functor absent → échec immédiat (non bloquant)
+            # 1) Si functor absent → échec immédiat (non bloquant)
             if functor not in self.theStore:
                 pid.send((f"get({si}) failed").encode("utf-8"))
                 return (False, f"get({si}) failed")
 
-            # 🔴 2) Exact match uniquement (PAS de partial_match ici)
+            # 2) Exact match uniquement (PAS de partial_match ici)
             if si not in self.theStore[functor]:
                 pid.send((f"get({si}) failed").encode("utf-8"))
                 return (False, f"get({si}) failed")
 
-            # 🔴 3) Décrémentation
+            # 3) Décrémentation
             self.theStore[functor][si] -= 1
 
-            # 🔴 4) Suppression si compteur = 0
+            # 4) Suppression si compteur = 0
             if self.theStore[functor][si] == 0:
                 del self.theStore[functor][si]
 
-            # 🔴 5) Suppression du functor si vide
+            # 5) Suppression du functor si vide
             if not self.theStore[functor]:
                 del self.theStore[functor]
 
-            # 🔴 6) Réveiller nask
+            # 6) Réveiller nask
             self.wakeUpNOnSI(functor)
 
             pid.send((f"{si} successfully got").encode("utf-8"))
