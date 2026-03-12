@@ -71,7 +71,12 @@ class Literal:
     def to_code(literal):
         args = ','.join(literal.arguments)
         return f'{literal.predicate}({args})'
-
+    @staticmethod
+    def from_string(literal_str):
+        """Parses a literal string like 'has_car(A,B)' into a Literal object."""
+        predicate, args = literal_str.split('(')
+        arguments = args.rstrip(')').split(',')
+        return Literal(predicate.strip(), tuple(arguments))
     # AC: TODO - REFACTOR
     def __str__(self):
         if self.directions:
@@ -110,6 +115,9 @@ class Literal:
         if other == None:
             return False
         return self.my_hash() == other.my_hash()
+    def to_hashable(self):
+        """Convert arguments to a tuple to ensure hashing works correctly."""
+        return Literal(self.predicate, tuple(self.arguments), self.directions, self.positive, self.meta)
 
     def my_hash(self):
         return hash((self.predicate, self.arguments))
@@ -123,6 +131,25 @@ class Clause:
             head_str = Literal.to_code(head)
         body_str = ','.join(Literal.to_code(literal) for literal in body)
         return head_str + ':-' + body_str
+    
+    @staticmethod
+    def from_string(rule_str):
+        """Parses a rule string into a Clause object."""
+        if ':-' in rule_str:
+            head_body = rule_str.split(':-')
+            head = Literal.from_string(head_body[0].strip()) if head_body[0] else None
+            body = tuple(
+                Literal.from_string(lit.strip()) 
+                for lit in head_body[1].split(',') 
+                if '(' in lit  # ✅ Ensure it's a valid literal
+            )
+        else:
+            # No body literals, only head
+            head = Literal.from_string(rule_str.strip()) if '(' in rule_str else None
+            body = tuple()  # Empty body
+
+        return (head, body)
+
 
     @staticmethod
     def clause_hash(clause):
@@ -148,6 +175,14 @@ class Clause:
         if head.predicate.startswith('inv'):
             return False
         return True
+    
+    @staticmethod
+    def to_hashable(clause):
+        """Convert clause components into hashable structures"""
+        head, body = clause
+        head = head.to_hashable() if head else None
+        body = tuple(lit.to_hashable() for lit in body)
+        return (head, body)
 
     @staticmethod
     def all_vars(clause):

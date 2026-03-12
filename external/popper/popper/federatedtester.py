@@ -5,10 +5,10 @@ import sys
 import time
 import pkg_resources
 from contextlib import contextmanager
-from . core import Clause, Literal
+from .core import Clause, Literal
 from datetime import datetime
 
-class Tester():
+class FederatedTester():
     def __init__(self, settings):
         self.settings = settings
         self.prolog = Prolog()
@@ -20,8 +20,9 @@ class Tester():
         bk_pl_path = self.settings.bk_file
         exs_pl_path = self.settings.ex_file
         test_pl_path = pkg_resources.resource_filename(__name__, "lp/test.pl")
-
-        for x in [exs_pl_path, bk_pl_path, test_pl_path]:
+        
+        #for x in [exs_pl_path, bk_pl_path, test_pl_path]:
+        for x in [test_pl_path]:
             if os.name == 'nt': # if on Windows, SWI requires escaped directory separators
                 x = x.replace('\\', '\\\\')
             self.prolog.consult(x)
@@ -106,11 +107,11 @@ class Tester():
         return tp, fn, tn, fp
 
     #def is_totally_incomplete(self, rule):
-     #   if not Clause.is_separable(rule):
-      #      return False
-       # return not any(x in self.success_set([rule]) for x in self.pos)
+    #    if not Clause.is_separable(rule):
+    #        return False
+    #    return not any(x in self.success_set([rule]) for x in self.pos)
 
     #def is_inconsistent(self, rule):
-     #   if not Clause.is_separable(rule):
-      #      return False
-       # return any(x in self.success_set([rule]) for x in self.neg)
+    #    if not Clause.is_separable(rule):
+    #        return False
+    #    return any(x in self.success_set([rule]) for x in self.neg)

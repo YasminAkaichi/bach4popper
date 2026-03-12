@@ -4,7 +4,7 @@ from popper.constrain import Constrain
 from aggstrategy import aggregate_outcomes
 import time
 from popper.core import Clause
-from popper.tester import Tester
+from popper.federatedtester import FederatedTester
 from popper.util import load_kbpath, Settings, Stats
 from popper.loop import build_rules, ground_rules
 from popper.generate import generate_program
@@ -81,7 +81,7 @@ def popper_initialisation(path_dir):
     solver = ClingoSolver(settings)
     grounder = ClingoGrounder()
     constrainer = Constrain()
-    tester = Tester(settings)
+    tester = FederatedTester(settings)
     #settings.num_pos, settings.num_neg = len(tester.pos), len(tester.neg)
     stats = Stats(log_best_programs=settings.info) 
     current_hypothesis = None
