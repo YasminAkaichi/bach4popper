@@ -156,7 +156,7 @@ def popper(settings, stats):
                 stats.register_best_program(program, conf_matrix)
 
             # BUILD RULES
-            with stats.duration('build'):
+            with stats.duration('build_rules'):
                 rules = build_rules(settings, stats, constrainer, tester, program, before, min_clause, outcome)
 
             # GROUND RULES

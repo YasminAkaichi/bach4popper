@@ -17,7 +17,7 @@ NB_CLIENTS = 3
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(BASE_DIR, "datasets", "zendo1")
+DATASET_PATH = os.path.join(BASE_DIR, "datasets", "trains")
 
 # ================================
 #    GLOBAL STATE
@@ -286,7 +286,10 @@ def federated_test(program, store, nb_client, round_id):
 #   MAIN LOOP
 # ================================
 
-def run_server():
+import time
+import socket
+
+def run_server(with_suspension=True):
     tFedPopper = 0.0
     tCentralPopper = 0.0
 
@@ -307,22 +310,27 @@ def run_server():
     found_solution = False
     TIMEOUT = 600
 
-    start_time = time.perf_counter()
+    # juste choisir le timer pour les mesures
+    timer = time.perf_counter if with_suspension else time.process_time
+
+    # timeout réel reste en perf_counter
+    wall_start = time.perf_counter()
+    start_time = timer()
 
     try:
         for size in range(1, st.settings.max_literals + 1):
 
             if found_solution:
-                break   # stop outer loop properly
+                break
 
             st.stats.update_num_literals(size)
             st.solver.update_number_of_literals(size)
 
             while True:
 
-                # ---- TIMEOUT (global Popper timeout)
-                if time.perf_counter() - start_time > TIMEOUT:
-                    print(f"\n⏱️ TIMEOUT reached ({TIMEOUT}s)")
+                # timeout réel inchangé
+                if time.perf_counter() - wall_start > TIMEOUT:
+                    print(f"\n TIMEOUT reached ({TIMEOUT}s)")
                     found_solution = True
                     break
 
@@ -335,30 +343,31 @@ def run_server():
                     (program, before, min_clause) = generate_program(model)
 
                 # ---- FEDERATED TEST
-                start_fed = time.perf_counter()
-                outcome, score, rules_str = federated_test(
-                    program, store, nb_client, round_id
-                )
-                tFedPopper += time.perf_counter() - start_fed
+                start_fed = timer()
+                with st.stats.duration('test'):
+                    outcome, score, rules_str = federated_test(
+                        program, store, nb_client, round_id
+                    )
+                tFedPopper += timer() - start_fed
 
                 st.stats.total_programs += 1
 
                 print(f"[Program #{round_id}] outcome={outcome}, score={score}")
 
-                # ---- UPDATE BEST (independent from stopping)
+                # ---- UPDATE BEST
                 if best_score is None or score > best_score:
                     best_score = score
                     best_rules_str = list(rules_str)
                     best_round = round_id
 
-                # ---- STOP CONDITION (true Popper semantics)
+                # ---- STOP CONDITION
                 if outcome == ("all", "none"):
                     print("\n Solution found (ALL, NONE)")
                     found_solution = True
                     break
 
                 # ---- BUILD / GROUND / ADD
-                start_symb = time.perf_counter()
+                start_symb = timer()
 
                 with st.stats.duration('build'):
                     rules = build_rules(
@@ -375,7 +384,7 @@ def run_server():
                 with st.stats.duration('add'):
                     st.solver.add_ground_clauses(rules)
 
-                tCentralPopper += time.perf_counter() - start_symb
+                tCentralPopper += timer() - start_symb
 
                 round_id += 1
 
@@ -386,9 +395,9 @@ def run_server():
         except:
             pass
         store.close()
-
+    
     # ---- FINAL TIMING
-    global_time = time.perf_counter() - start_time
+    global_time = timer() - start_time
 
     print("\n========== FINAL SUMMARY ==========")
     print(f"Total programs explored : {round_id}")
@@ -405,13 +414,20 @@ def run_server():
     print(f"Total time           : {global_time:.4f}s")
     print(f"Time in Popper core  : {tCentralPopper:.4f}s")
     print(f"Time in Federation   : {tFedPopper:.4f}s")
-    print(f"Coordination ratio   : {tFedPopper/global_time:.2%}")
+    print(f"Coordination ratio   : {tFedPopper/global_time:.2%}" if global_time > 0 else "Coordination ratio   : N/A")
+    print(f"Coordination ratio   : {tFedPopper/global_time:.2%}" if global_time > 0 else "Coordination ratio   : N/A")
 
-
+    print("\n========== SERVER TIMING ==========")
+    st.stats.show()
 
 # ================================
 #   RUN
 # ================================
 if __name__ == "__main__":
     nb_client = 0
-    run_server()
+
+    # avec suspension
+    #run_server(with_suspension=True)
+
+    # sans suspension
+    run_server(with_suspension=False)

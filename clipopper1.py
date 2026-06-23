@@ -22,7 +22,7 @@ CLIENT_ID = 1
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(BASE_DIR, "datasets", "zendo1_part1")
+DATASET_PATH = os.path.join(BASE_DIR, "datasets", "trains_part1")
 # ======================================================
 #  BLPy parsing helpers
 # ======================================================
@@ -118,7 +118,7 @@ def format_conf_matrix(conf_matrix):
     )
 
 
-def popper_test_hypothesis_final(hypothesis_strings, tester):
+def popper_test_hypothesis_final(hypothesis_strings, tester,stats):
     try:
         print("\n Starting local test of hypothesis...")
         print("Hypothesis strings:")
@@ -137,8 +137,8 @@ def popper_test_hypothesis_final(hypothesis_strings, tester):
 
         print(f"Total Pos examples: {len(tester.pos)}")
         print(f"Total Neg examples: {len(tester.neg)}")
-
-        cm = tester.test(rules)
+        with stats.duration('test'):
+            cm = tester.test(rules)
 
         print("Confusion matrix:", cm)
         print(format_conf_matrix(cm))
@@ -244,7 +244,7 @@ def run_client():
             # 5) Normal round → local test
             # --------------------------------------------------
             Eplus, Eminus, score = popper_test_hypothesis_final(
-                hypothesis, tester
+                hypothesis, tester,stats
             )
 
             print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
@@ -260,10 +260,18 @@ def run_client():
         print("Client error:", e)
 
     finally:
-        #sock.close()
-        sock.send(b"close")
-        sock.recv(1024)
+        try:
+            sock.send(b"close")
+            sock.settimeout(1.0)
+            sock.recv(1024)
+        except:
+            pass
+        finally:
+            sock.close()
+
         print("Connection closed.")
+        print("\n========== CLIENT TIMING ==========")
+        stats.show()
 
 
 

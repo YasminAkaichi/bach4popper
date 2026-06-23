@@ -232,7 +232,7 @@ class Stats:
     def total_exec_time(self):
         return perf_counter() - self.exec_start
 
-    def show(self):
+    def show_old(self):
         message = f'Total programs: {self.total_programs}\n'
         total_op_time = 0
         for summary in self.duration_summary():
@@ -244,6 +244,29 @@ class Stats:
         message += f'Total operation time: {total_op_time:0.2f}s\n'
         message += f'Total execution time: {self.total_exec_time():0.2f}s'
         self.logger.info(message)
+    
+    def show(self):
+        message = f'%% Total programs: {self.total_programs}\n'
+        total_op_time = 0
+
+        for summary in self.duration_summary():
+            message += (
+                f'%% {summary.operation}:\n'
+                f'%%     Called: {summary.called} times   '
+                f'Total: {summary.total:0.2f}     '
+                f'Mean: {summary.mean:0.3f}     '
+                f'Max: {summary.maximum:0.3f}\n'
+            )
+
+            if summary.operation.lower() != 'basic setup':
+                total_op_time += summary.total
+
+        message += f'%% Total operation time: {total_op_time:0.2f}s\n'
+        message += f'%% Total execution time: {self.total_exec_time():0.2f}s'
+
+        self.logger.info(message)
+        print(message)
+
 
     def duration_summary(self):
         summary = []

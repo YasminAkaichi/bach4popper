@@ -27,7 +27,7 @@ CLIENT_ID = 2
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATASET_PATH = os.path.join(BASE_DIR, "datasets", "zendo1_part2")
+DATASET_PATH = os.path.join(BASE_DIR, "datasets", "trains_part2")
 
 from parser import Parser
 
@@ -358,7 +358,7 @@ def format_conf_matrix(conf_matrix):
     )
 
 
-def popper_test_hypothesis_final(hypothesis_strings, tester):
+def popper_test_hypothesis_final(hypothesis_strings, tester,stats):
     try:
         print("\n Starting local test of hypothesis...")
         print("Hypothesis strings:")
@@ -377,8 +377,8 @@ def popper_test_hypothesis_final(hypothesis_strings, tester):
 
         print(f"Total Pos examples: {len(tester.pos)}")
         print(f"Total Neg examples: {len(tester.neg)}")
-
-        cm = tester.test(rules)
+        with stats.duration('test'):
+            cm = tester.test(rules)
 
         print("Confusion matrix:", cm)
         print(format_conf_matrix(cm))
@@ -537,15 +537,15 @@ def run_client():
         while True:
             hypothesis, nb_raw = popper_read_hypothesis(sock, tour)
 
-            # 🔴 FINAL
+            # FINAL
             if nb_raw == "final":
-                print("\n🎉 FINAL round detected")
+                print("\nFINAL round detected")
                 print("Final hypothesis:")
                 for h in hypothesis:
                     print("  ", h)
                 break
 
-            # 🟢 NORMAL
+            # NORMAL
             nb_cl = nb_raw
           
 
@@ -558,7 +558,7 @@ def run_client():
             # 5) Normal round → local test
             # --------------------------------------------------
             Eplus, Eminus, score = popper_test_hypothesis_final(
-                hypothesis, tester
+                hypothesis, tester,stats
             )
 
             print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
@@ -574,85 +574,21 @@ def run_client():
         print("Client error:", e)
 
     finally:
-        #sock.close()
-        sock.send(b"close")
-        sock.recv(1024)
-        print("Connection closed.")
-
-
-def run_clientxx():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.connect(("127.0.0.1", 8000))
-
-    try:
-        cli_prompt()
-        client_id, path_dir, settings, tester, stats = initialisation()
-
-        tour = 0
-        final_round = False
-
-        while True:
-            # --------------------------------------------------
-            # 1) Ask for current round info
-            # --------------------------------------------------
-            #sock.send(f"ask(round({tour}))".encode())
-            #resp = sock.recv(1024).decode()
-
-            
-            #print("Raw prgmlen:", resp)
-
-            # 3) CAS FINAL
-         
-            hypothesis, nb_cl = popper_read_hypothesis(sock, tour)
-            
-            if nb_cl == "final":
-                print("\n🎉 FINAL round detected")
-                print("Final hypothesis:")
-                for h in hypothesis:
-                    print("   ", h)
-                break
-
-
-        
-            # --------------------------------------------------
-            # 5) Normal round → local test
-            # --------------------------------------------------
-            Eplus, Eminus, score = popper_test_hypothesis_final(
-                hypothesis, tester
-            )
-
-            print(f"Local outcome = ({Eplus}, {Eminus}), score={score}")
-
-            # --------------------------------------------------
-            # 6) Send feedback
-            # --------------------------------------------------
-            send_epair(sock, client_id, tour, Eplus, Eminus, score)
-
-            # attendre que le prochain round soit publié
-            next_round = tour + 1
-
-            sock.send(f"ask(round({next_round}))".encode())
-            resp = sock.recv(1024).decode()
-
-            if "present" in resp:
-                tour = next_round
-            else:
-                print("No next round → server finished.")
-                break
-
-    except Exception as e:
-        print("Client error:", e)
-
-    finally:
-        #sock.close()
-        #print("Connection closed.")
         try:
             sock.send(b"close")
+            sock.settimeout(1.0)
             sock.recv(1024)
-        except Exception:
+        except:
             pass
-        sock.close()
+        finally:
+            sock.close()
+
         print("Connection closed.")
+        print("\n========== CLIENT TIMING ==========")
+        stats.show()
+
+
+
 
 
 #myparser = Parser()
