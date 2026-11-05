@@ -1,0 +1,6 @@
+numpy
+clingo
+pyswip
+python-sat
+bitarray
+parsimonious

@@ -1,0 +1,189 @@
+"""
+
+ Copyright (c) 2025 Jean-Marie Jacquet 
+ 
+ Permission is hereby granted, free of charge, to any person obtaining
+ a  copy of  this  software and  associated  documentation files  (the
+ "Software"), to  deal in the Software  without restriction, including
+ without limitation the  rights to use, copy,  modify, merge, publish,
+ distribute, sublicense,  and/or sell copies  of the Software,  and to
+ permit persons to whom the Software is furnished to do so, subject to
+ the following conditions:
+ 
+ The  above  copyright notice  and  this  permission notice  shall  be
+ included in all copies or substantial portions of the Software.
+ 
+ THE  SOFTWARE IS  PROVIDED "AS  IS",  WITHOUT WARRANTY  OF ANY  KIND,
+ EXPRESS OR  IMPLIED, INCLUDING BUT  NOT LIMITED TO THE  WARRANTIES OF
+ MERCHANTABILITY,    FITNESS   FOR    A    PARTICULAR   PURPOSE    AND
+ NONINFRINGEMENT. IN NO  EVENT SHALL THE AUTHORS  OR COPYRIGHT HOLDERS
+ BE LIABLE  FOR ANY CLAIM, DAMAGES  OR OTHER LIABILITY, WHETHER  IN AN
+ ACTION OF  CONTRACT, TORT OR  OTHERWISE, ARISING  FROM, OUT OF  OR IN
+ CONNECTION WITH  THE SOFTWARE  OR THE  USE OR  OTHER DEALINGS  IN THE
+ SOFTWARE.
+
+
+ Implementation note :
+
+ This file defines the grammar used by the parser.Parser object.
+ To that end the parsimonious library is used. For details, see
+
+ https://github.com/erikrose/parsimonious
+
+"""
+
+import re
+from parsimonious.exceptions import ParseError, VisitationError
+from grammar import GRAMMAR
+from grammar_tree_visitor import Visitor
+
+class Parser:
+    """ Parser that can interpret any grammar rules present in grammar.py
+    
+    Attributes
+    ----------
+    grammar : parsimonious.grammar.Grammar
+        Defines all rules that can be parsed
+    visitor : grammar_tree_visitor.Visitor
+        Navigates through the grammatical tree outputed by the 
+        grammar object into a useful Python object
+    """
+    def __init__(self):
+        self.grammar = GRAMMAR
+        self.visitor = Visitor()
+
+    def parse(self, string, rule='blpy_entry'):
+        """ Transforms the input string according to the specified rule
+
+        Parameters
+        ----------
+        string : str
+            Either some text or the path to a file
+        rule : str
+            The rule on which to parse the input string
+
+        Returns
+        -------
+        object
+            Object from the andante package whose class depends on input rule
+        """
+        string = string.strip()
+        
+        # Remove all comments
+        text_no_comments = re.sub(r'%.*\n', '\n', string)
+        
+        try:
+            tree   = self.grammar[rule].parse(text_no_comments)
+            output = self.visitor.visit(tree)
+            return output
+        except ParseError as e:
+            message = 'Failed to parse rule <%s>' % e.expr.as_rule()
+            full_text = text_no_comments
+            filename  = ""
+            raise SyntaxError(message, (filename, e.line(), e.column(), full_text))
+        except VisitationError as e:
+            message = 'Error in the code when visiting the parsed tree. This should not happen. Please report it.'
+            raise Exception(message)            
+
+
+    def parse_siterm(self, string, rule='stInfo'):
+        """ Transforms the input string according to the specified rule
+
+        Parameters
+        ----------
+        string : str
+            Either some text or the path to a file
+        rule : str
+            The rule on which to parse the input string
+
+        Returns
+        -------
+        object
+            Object from the andante package whose class depends on input rule
+        """
+        string = string.strip()
+        
+        # Remove all comments
+        text_no_comments = re.sub(r'%.*\n', '\n', string)
+        
+        try:
+            tree   = self.grammar[rule].parse(text_no_comments)
+            output = self.visitor.visit(tree)
+            return output
+        except ParseError as e:
+            message = 'Failed to parse rule <%s>' % e.expr.as_rule()
+            full_text = text_no_comments
+            filename  = ""
+            raise SyntaxError(message, (filename, e.line(), e.column(), full_text))
+        except VisitationError as e:
+            message = 'Error in the code when visiting the parsed tree. This should not happen. Please report it.'
+            raise Exception(message)            
+        
+
+    def parse_augsiterm(self, string, rule='augStInfo'):
+        """ Transforms the input string according to the specified rule
+
+        Parameters
+        ----------
+        string : str
+            Either some text or the path to a file
+        rule : str
+            The rule on which to parse the input string
+
+        Returns
+        -------
+        object
+            Object from the andante package whose class depends on input rule
+        """
+        string = string.strip()
+        
+        # Remove all comments
+        text_no_comments = re.sub(r'%.*\n', '\n', string)
+        
+        try:
+            tree   = self.grammar[rule].parse(text_no_comments)
+            output = self.visitor.visit(tree)
+            return output
+        except ParseError as e:
+            message = 'Failed to parse rule <%s>' % e.expr.as_rule()
+            full_text = text_no_comments
+            filename  = ""
+            raise SyntaxError(message, (filename, e.line(), e.column(), full_text))
+        except VisitationError as e:
+            message = 'Error in the code when visiting the parsed tree. This should not happen. Please report it.'
+            raise Exception(message)            
+
+
+    def parse_comAugStInfo(self, string, rule='comAugStInfo'):
+        """ Transforms the input string according to the specified rule
+
+        Parameters
+        ----------
+        string : str
+            Either some text or the path to a file
+        rule : str
+            The rule on which to parse the input string
+
+        Returns
+        -------
+        object
+            Object from the andante package whose class depends on input rule
+        """
+        string = string.strip()
+        
+        # Remove all comments
+        text_no_comments = re.sub(r'%.*\n', '\n', string)
+        
+        try:
+            tree   = self.grammar[rule].parse(text_no_comments)
+            output = self.visitor.visit(tree)
+            return output
+        except ParseError as e:
+            message = 'Failed to parse rule <%s>' % e.expr.as_rule()
+            full_text = text_no_comments
+            filename  = ""
+            raise SyntaxError(message, (filename, e.line(), e.column(), full_text))
+        except VisitationError as e:
+            message = 'Error in the code when visiting the parsed tree for comAugStInfo. This should not happen. Please report it.'
+            raise Exception(message)            
+        
