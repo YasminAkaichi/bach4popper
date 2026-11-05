@@ -59,13 +59,13 @@ def print_run(out: Path, hybrid: bool) -> None:
     print(f"\n=== {out.name} ===")
 
     print("\nClients (evaluation of the programs on their own examples)")
-    print(f"{'Client':>6}{'pos':>6}{'neg':>6}{'programs':>10}{'eval(s)':>10}{'avg(ms)':>9}")
-    print("-" * 47)
+    print(f"{'Client':>6}{'pos':>6}{'neg':>6}{'eval(s)':>10}{'avg(ms)':>9}")
+    print("-" * 37)
     for path in sorted(fed_dir.glob("client_*_result.json")):
         c = _load(path) or {}
         avg = c.get("average_eval_wall")
         print(f"{c.get('client_id', '?'):>6}{_f(c.get('number_of_positive_examples')):>6}"
-              f"{_f(c.get('number_of_negative_examples')):>6}{_f(c.get('number_of_evaluations')):>10}"
+              f"{_f(c.get('number_of_negative_examples')):>6}"
               f"{_f(c.get('total_eval_wall')):>10}{_f(avg * 1000 if avg is not None else None, 1):>9}")
 
     c0 = _load(out / "client0" / "server_result.json") if hybrid else None

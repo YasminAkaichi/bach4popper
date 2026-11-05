@@ -16,7 +16,7 @@ shared store ([Bach](https://github.com/YasminAkaichi/bach4popper/tree/main/filp
 > non-IID partitions, the **hybrid evaluation protocol** (a second, complete
 > search by a client 0 that holds the whole dataset, compared round by round
 > with the federated search), a centralized Popper baseline, and a per-client
-> report (examples, programs evaluated, evaluation time). Results obtained with
+> report (examples, evaluation time). Results obtained with
 > this code may therefore differ from, or complement, those reported in the
 > paper.
 
@@ -87,11 +87,11 @@ The output of the store, the server and the clients is written to
 === zendo1_k3_iid_seed42 ===
 
 Clients (evaluation of the programs on their own examples)
-Client   pos   neg  programs   eval(s)  avg(ms)
------------------------------------------------
-     1     7     7       194      0.06      0.3
-     2     7     7       194      0.08      0.4
-     3     6     6       194      0.06      0.3
+Client   pos   neg   eval(s)  avg(ms)
+-------------------------------------
+     1     7     7      0.06      0.3
+     2     7     7      0.08      0.4
+     3     6     6      0.06      0.3
 
 Search                   Solution  Rounds  Programs  Learning(s)  Core(s)  Federation(s)
 ----------------------------------------------------------------------------------------
