@@ -161,8 +161,8 @@ python -m filp_bach4popper prepare --dataset trains1000 --clients 10 --partition
 ```
 filp_bach4popper/
   cli.py, pipeline.py      command line and orchestration
-  server.py, client.py     Bach4Popper server and client
-  strategy/aggregation.py  aggregation of the answers (ALL / SOME / NONE)
+  srvpopper.py, clipopper.py  Bach4Popper server and client
+  strategy/aggstrategy.py  aggregation of the answers (ALL / SOME / NONE)
   bach/                    coordination store (bbpopper.py)
   popper-core/             Popper 1.1.0 with build_rules_server and FederatedTester
   partitioning/            IID / non-IID partitioning, dataset writer

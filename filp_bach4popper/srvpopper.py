@@ -1,4 +1,4 @@
-# server.py
+# srvpopper.py
 # ------------------------------------------------------
 #   FILP Distributed Server using BLPy protocol
 # ------------------------------------------------------
@@ -17,7 +17,7 @@ from popper.util import load_kbpath, Settings, Stats
 from popper.loop import build_rules_server, ground_rules
 from popper.generate import generate_program
 
-from .strategy.aggregation import aggregate_outcomes
+from .strategy.aggstrategy import aggregate_outcomes
 
 # ======================================================
 #  SERVER CONFIGURATION

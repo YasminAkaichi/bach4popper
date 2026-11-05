@@ -112,7 +112,7 @@ def _search(source: Path, client_dirs: list[Path], timeout: int, result_dir: Pat
             raise RuntimeError("The Bach store stopped during start-up.")
 
         server = subprocess.Popen(
-            [sys.executable, "-m", "filp_bach4popper.server",
+            [sys.executable, "-m", "filp_bach4popper.srvpopper",
              "--dataset", str(source), "--clients", str(len(client_dirs)),
              "--timeout", str(timeout), "--store-address", address,
              "--timing-mode", timing_mode, "--output-dir", str(result_dir)],
@@ -127,7 +127,7 @@ def _search(source: Path, client_dirs: list[Path], timeout: int, result_dir: Pat
         clients = []
         for i, client_dir in enumerate(client_dirs, start=1):
             proc = subprocess.Popen(
-                [sys.executable, "-m", "filp_bach4popper.client",
+                [sys.executable, "-m", "filp_bach4popper.clipopper",
                  "--client-id", str(i), "--dataset", str(client_dir),
                  "--store-address", address, "--output-dir", str(result_dir)],
                 cwd=PACKAGE_ROOT, env=env, stdout=sink(f"client_{i}"),
