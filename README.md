@@ -1,34 +1,37 @@
-# Bach4Popper – Learning by Coordination
+# Bach4Popper
 
-Command-line implementation of **Learning by Coordination** for federated ILP,
-extracted from the FILP platform (no user interface). The server runs Popper's
-generate-test-constrain loop: it generates a program, the clients only evaluate
-it on their own examples and answer ALL / SOME / NONE (for the positive and for
-the negative examples), and the server aggregates the answers and builds the
-constraints (clause-level feedback included). No example, fact or rule leaves a
-client. The server and the clients communicate through a small shared store
-(Bach).
+Command-line implementation of **Learning by Coordination** (Bach4Popper) for
+federated ILP, extracted from the FILP platform (no user interface). The server
+runs Popper's generate-test-constrain loop: it generates a program, each client
+evaluates it on its own examples only and answers **ALL / SOME / NONE** (for the
+positive and for the negative examples), and the server aggregates the answers
+and builds the constraints (clause-level feedback included). No example, fact or
+rule leaves a client. The server and the clients communicate through a small
+shared store ([Bach](https://github.com/YasminAkaichi/bach4popper/tree/main/filp_bach4popper/bach)).
 
-**Relation to the published paper.** FILP (Federated Inductive Logic
-Programming) was introduced in *Federated Inductive Logic Programming for
-Explainable Artificial Intelligence* (Akaichi, Jacquet, Linden and Vanhoof,
-EXPLIMED @ ECAI 2025). This repository goes beyond the published version: it
-adds Learning by Coordination (Bach4Popper), IID and non-IID partitions, the
-**hybrid evaluation protocol** (a second, complete search by a client 0 that
-holds the whole dataset, compared round by round with the federated search),
-a centralized Popper baseline, and a per-client report (examples, programs
-evaluated, evaluation time). Results obtained with this code may therefore
-differ from, or complement, those reported in the paper.
+> **Relation to the published paper.** Bach4Popper was introduced in
+> *Bach4Popper: Towards Federated Inductive Logic Programming Using
+> Coordination* (Akaichi, Barkallah, Jacquet, Linden and Vanhoof, COORDINATION
+> 2026). This repository goes beyond the published version: it adds IID and
+> non-IID partitions, the **hybrid evaluation protocol** (a second, complete
+> search by a client 0 that holds the whole dataset, compared round by round
+> with the federated search), a centralized Popper baseline, and a per-client
+> report (examples, programs evaluated, evaluation time). Results obtained with
+> this code may therefore differ from, or complement, those reported in the
+> paper.
 
 ## Citation
 
+If you use this code, please cite the paper:
+
 ```bibtex
-@inproceedings{akaichi2025filp,
-  title     = {Federated Inductive Logic Programming for Explainable Artificial Intelligence},
-  author    = {Akaichi, Yasmine and Jacquet, Jean-Marie and Linden, Isabelle and Vanhoof, Wim},
-  booktitle = {EXPLIMED @ ECAI 2025},
-  year      = {2025},
-  url       = {https://ceur-ws.org/Vol-4059/paper1.pdf}
+@inproceedings{akaichi2026bach4popper,
+  title        = {Bach4Popper: Towards Federated Inductive Logic Programming Using Coordination},
+  author       = {Akaichi, Yasmine and Barkallah, Manel and Jacquet, Jean-Marie and Linden, Isabelle and Vanhoof, Wim},
+  booktitle    = {International Conference on Coordination Models and Languages},
+  pages        = {136--156},
+  year         = {2026},
+  organization = {Springer}
 }
 ```
 
